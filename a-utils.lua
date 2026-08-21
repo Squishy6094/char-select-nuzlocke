@@ -8,7 +8,9 @@ function startup_init_stall(framesBefore)
 end
 
 hook_event(HOOK_UPDATE, function()
-	stallFrame = stallFrame + 1
+    if stallFrame < stallComplete then
+        stallFrame = stallFrame + 1
+    end
 end)
 
 
@@ -97,4 +99,17 @@ function play_char_select_character_sound(m, charData, charSound)
     else
         play_sound(gCharacters[charData[1].baseChar][varToChar[charSound]], m.marioObj.header.gfx.cameraToObject)
     end
+end
+
+---@param string string
+--- Splits a string into a table by spaces
+function string_split(string, splitAt)
+    if splitAt == nil then
+        splitAt = " "
+    end
+    local result = {}
+    for match in string:gmatch(string.format("[^%s]+", splitAt)) do
+        table.insert(result, match)
+    end
+    return result
 end

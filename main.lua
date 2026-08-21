@@ -14,16 +14,21 @@ local function save_file_prefix(str)
     return "saveFile"..tostring(get_current_save_file_num())..(save_file_get_using_backup_slot() and "B" or "")..str
 end
 
-local function update_save()
+local function update_save(reset, seed)
+    save_file_set_using_backup_slot(true)
     if not network_is_server() then return end
-    if save_file_get_flags() < mod_storage_load_number(save_file_prefix("progress"), 0) then
+    if save_file_get_flags() < mod_storage_load_number(save_file_prefix("progress"), 0) or reset then
         -- Assume if progress is lost, that the save had been deleted
         log_to_console("Character Select Nuzlocke: Save Data Lost, Deleting Custom Save Flags!", CONSOLE_MESSAGE_WARNING)
         mod_storage_remove(save_file_prefix("seed"))
+        local charFieldList = string_split(mod_storage_load(save_file_prefix("charList"), ""))
+        for _, charName in pairs(charFieldList) do
+            mod_storage_remove(save_file_prefix("charState"..charName))
+        end
     end
     mod_storage_save_integer(save_file_prefix("progress"), save_file_get_flags())
 
-    gGlobalSyncTable.nuzlockeSeed = mod_storage_load_integer(save_file_prefix("seed"), get_time()%SEED_MAX)
+    gGlobalSyncTable.nuzlockeSeed = seed or mod_storage_load_integer(save_file_prefix("seed"), get_time()%SEED_MAX)
     mod_storage_save_integer(save_file_prefix("seed"), gGlobalSyncTable.nuzlockeSeed)
     log_to_console("Character Select Nuzlocke: Set Seed to '" .. gGlobalSyncTable.nuzlockeSeed .. "'")
 end
@@ -61,22 +66,11 @@ local function nuzlocke_seed_rng(offset)
     math.randomseed(gGlobalSyncTable.nuzlockeSeed + offset)
 end
 
-local prevUnlockState = {}
-local function initial_setup()
-    local charList = ""
-	local starter = 0
-	for i = 0, #charTable do
-        nuzlocke_set_character_state(i, mod_storage_load_integer(save_file_prefix("charState"..charTable[i].saveName), i == starter and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED))
-        charList = charList .. " " .. charTable[i].saveName
-        charSelect.character_set_locked(i, function()
-            return nuzlocke_get_character_state(i) == NUZLOCKE_CHAR_UNLOCKED
-        end, true)
-	end
-    mod_storage_save(save_file_prefix("charList"), charList)
-
-    -- Map out each level to a character
+-- Map out each level to a character
+local function map_characters()
     nuzlocke_seed_rng()
     
+    charLevelRng = {}
     local mappedCharCount = 0
     local subArea = 1
     repeat
@@ -106,14 +100,25 @@ local function initial_setup()
     until #charTable == mappedCharCount
 end
 
-local function unlock_random_character()
-    if nuzlocke_count_character_state(NUZLOCKE_CHAR_LOCKED) == 0 then return end
-    math.randomseed(gGlobalSyncTable.nuzlockeSeed)
-	local unlocked = 0
-    repeat
-        unlocked = math.random(0, #charTable)
-    until nuzlocke_get_character_state(unlocked) == NUZLOCKE_CHAR_LOCKED
-	nuzlocke_set_character_state(unlocked, NUZLOCKE_CHAR_UNLOCKED)
+local prevUnlockState = {}
+local function initial_setup()
+	local starter = 0
+	for i = 0, #charTable do
+        nuzlocke_set_character_state(i, mod_storage_load_integer(save_file_prefix("charState"..charTable[i].saveName), i == starter and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED))
+        charSelect.character_set_locked(i, function()
+            return nuzlocke_get_character_state(i) == NUZLOCKE_CHAR_UNLOCKED
+        end, i ~= 0)
+	end
+
+    map_characters()
+end
+
+local function reset_new_game()
+	for i = 0, #charTable do
+        nuzlocke_set_character_state(i, i == 0 and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED)
+	end
+
+    map_characters()
 end
 
 local queueKill = -1
@@ -123,12 +128,19 @@ local function queue_char_kill()
     isDying = true
 end
 
+local function reset_save(seed)
+    save_file_erase_current_backup_save()
+    warp_to_start_level()
+    update_save(true, seed)
+    reset_new_game()
+end
+
 local function update()
     if startup_init_stall(1) then
 		charTable = _G.charSelect.character_get_full_table()
         initial_setup()
     end
-    --if not startup_init_stall() then return end
+    if not startup_init_stall() then return end
 
     if not isDying then
         if queueKill ~= -1 then
@@ -139,6 +151,7 @@ local function update()
         isDying = false
     end
 
+    --[[
     local m = gMarioStates[0]
     if m.controller.buttonPressed & D_JPAD ~= 0 then
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x + 300, m.pos.y, m.pos.z - 300, function(o)
@@ -160,8 +173,10 @@ local function update()
         spawn_sync_object(id_bhvBreakableBoxSmall, E_MODEL_BREAKABLE_BOX_SMALL, m.pos.x - 300, m.pos.y, m.pos.z - 300, function(o)
         end)
     end
+    ]]
 
     if network_is_server() then
+        local charList = ""
         for charNum, char in pairs(charTable) do
             local saveName = "charState"..char.saveName
             if not prevUnlockState[saveName] or prevUnlockState[saveName] ~= gGlobalSyncTable[saveName] then
@@ -172,9 +187,15 @@ local function update()
                 if gGlobalSyncTable[saveName] == NUZLOCKE_CHAR_LOCKED then
                     mod_storage_remove(save_file_prefix(saveName))
                 else
+                    charList = charList .. " " .. char.saveName
                     mod_storage_save_integer(save_file_prefix(saveName), gGlobalSyncTable[saveName])
                 end
             end
+        end
+        mod_storage_save(save_file_prefix("charList"), charList)
+
+        if nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) == 0 then
+            reset_save()
         end
     end
 end
@@ -441,7 +462,6 @@ local function on_sync()
     local currLevel = gNetworkPlayers[0].currLevelNum
     local currArea = gNetworkPlayers[0].currAreaIndex
     if not charLevelRng[currLevel] or not charLevelRng[currLevel][currArea] then return end
-    djui_chat_message_create("clear")
     local spawnPosList = {}
     for _, bhvId in pairs(bhvList1ups) do
         local o1up = obj_get_first_with_behavior_id(bhvId)
@@ -454,7 +474,6 @@ local function on_sync()
                 z = (floor.vertex1.z + floor.vertex2.z + floor.vertex3.z)/3
             })
             o1up = obj_get_next_with_same_behavior_id(o1up)
-            djui_chat_message_create("1up")
         end
     end
     if #spawnPosList == 0 then return end
@@ -463,7 +482,6 @@ local function on_sync()
 
     spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, spawnPos.x, spawnPos.y, spawnPos.z, function(o)
         o.oAnimState = charLevelRng[currLevel][currArea]
-        djui_chat_message_create("spawned")
     end)
 end
 
@@ -481,12 +499,10 @@ _G.charSelect.hook_allow_menu_open(block_menu_in_stages)
 
 local function set_seed(msg)
     if not network_is_server() then return end
-    local prevSeed = gGlobalSyncTable.nuzlockeSeed
     local seed = tonumber(msg) or math.random(0, SEED_MAX - 1)
     seed = math.round(seed)%SEED_MAX
-    
-    gGlobalSyncTable.nuzlockeSeed = seed
-    mod_storage_save_integer(save_file_prefix("seed"), gGlobalSyncTable.nuzlockeSeed)
+    local prevSeed = gGlobalSyncTable.nuzlockeSeed
+    reset_save(seed)
     djui_chat_message_create("Nuzlocke Seed changed: " .. prevSeed .. " -> " .. gGlobalSyncTable.nuzlockeSeed)
     return true
 end
