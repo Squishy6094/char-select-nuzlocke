@@ -42,12 +42,12 @@ local function block_menu_in_stages()
 end
 
 local function nuzlocke_set_character_state(charNum, charState)
-    if not charTable then return end
+    if not charTable or not charNum or not charState then return end
     gGlobalSyncTable["charState"..charTable[charNum].saveName] = charState
 end
 
 local function nuzlocke_get_character_state(charNum)
-    if not charTable then return end
+    if not charTable or not charNum then return end
     return gGlobalSyncTable["charState"..charTable[charNum].saveName]
 end
 
@@ -151,38 +151,29 @@ local function update()
         isDying = false
     end
 
-    --[[
     local m = gMarioStates[0]
     if m.controller.buttonPressed & D_JPAD ~= 0 then
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x + 300, m.pos.y, m.pos.z - 300, function(o)
-            o.oAnimState = 1
-            djui_chat_message_create("spawned")
+            o.oAnimState = CT_CELENA
         end)
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x + 150, m.pos.y, m.pos.z - 300, function(o)
             o.oAnimState = 2
-            djui_chat_message_create("spawned")
         end)
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x + 0, m.pos.y, m.pos.z - 300, function(o)
             o.oAnimState = 3
-            djui_chat_message_create("spawned")
         end)
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x - 150, m.pos.y, m.pos.z - 300, function(o)
             o.oAnimState = 4
-            djui_chat_message_create("spawned")
         end)
         spawn_sync_object(id_bhvBreakableBoxSmall, E_MODEL_BREAKABLE_BOX_SMALL, m.pos.x - 300, m.pos.y, m.pos.z - 300, function(o)
         end)
     end
-    ]]
 
     if network_is_server() then
         local charList = ""
         for charNum, char in pairs(charTable) do
             local saveName = "charState"..char.saveName
             if not prevUnlockState[saveName] or prevUnlockState[saveName] ~= gGlobalSyncTable[saveName] then
-                if gGlobalSyncTable[saveName] == NUZLOCKE_CHAR_DIED then
-                    
-                end
                 prevUnlockState[saveName] = gGlobalSyncTable[saveName]
                 if gGlobalSyncTable[saveName] == NUZLOCKE_CHAR_LOCKED then
                     mod_storage_remove(save_file_prefix(saveName))
@@ -202,12 +193,15 @@ end
 
 ---@param o Object
 local function bhv_unlockable_char_init(o)
-    if nuzlocke_get_character_state(o.oAnimState) ~= NUZLOCKE_CHAR_LOCKED then
+    o.oCharNum = o.oAnimState
+    o.oCharAlt = 1
+    o.oCharPalette = 1
+    if nuzlocke_get_character_state(o.oCharNum) ~= NUZLOCKE_CHAR_LOCKED then
         obj_mark_for_deletion(o)
         return
     end
     o.oFlags = OBJ_FLAG_COMPUTE_ANGLE_TO_MARIO | OBJ_FLAG_COMPUTE_DIST_TO_MARIO | OBJ_FLAG_UPDATE_GFX_POS_AND_ANGLE | OBJ_FLAG_SET_FACE_YAW_TO_MOVE_YAW | OBJ_FLAG_0100
-    o.globalPlayerIndex = MAX_PLAYERS
+    o.globalPlayerIndex = 0
     o.hitboxRadius = 80
     o.hitboxHeight = 160
     tagColor = {
@@ -216,59 +210,38 @@ local function bhv_unlockable_char_init(o)
         b = charTable[o.oAnimState][1].color.b * 0.5 + 127,
     }
     oTagLib.obj_set_nametag(o, charTable[o.oAnimState].nickname, tagColor)
-    local char = charTable[o.oAnimState]
-    obj_set_char_select_animation(o, char, charSelect.CS_ANIM_MENU, MARIO_ANIM_FIRST_PERSON)
 end
-
---[[
-bhvPlayerNPC = hook_behavior(nil, OBJ_LIST_GENACTOR, true, function(o)
-    playerNPC_pos = {x = o.oPosX, y = o.oPosY, z = o.oPosZ}
-    o.oFlags = OBJ_FLAG_COMPUTE_ANGLE_TO_MARIO | OBJ_FLAG_COMPUTE_DIST_TO_MARIO | OBJ_FLAG_UPDATE_GFX_POS_AND_ANGLE | OBJ_FLAG_SET_FACE_YAW_TO_MOVE_YAW
-    o.header.gfx.animInfo.curAnim = get_mario_vanilla_animation(MARIO_ANIM_FIRST_PERSON)
-    o.oInteractType = INTERACT_TEXT
-    o.hitboxRadius = 100
-    o.hitboxHeight = 100
-    o.oGraphYOffset = o.oGraphYOffset + 40
-    bhv_bobomb_buddy_init()
-end, function(o)
-    o.oIntangibleTimer = 0
-    bhv_bobomb_buddy_loop()
-end)
-]]
 
 ---@param o Object
 local function bhv_unlockable_char_loop(o)
+    charSelectObjs.character_obj_loop(o)
     o.oIntangibleTimer = -1
     local nM = nearest_mario_state_to_object(o) ---@type MarioState
 
-    -- Process Visuals
-    local char = charTable[o.oAnimState]
-    if o.header ~= nil and o.header.gfx ~= nil and o.header.gfx.sharedChild ~= nil then
-        o.header.gfx.sharedChild.hookProcess = 1
-    end
-    obj_set_model_extended(o, char[1].ogModel)
-
     if o.oAction == 0 then
-        if nM and obj_check_hitbox_overlap(o, nM.marioObj) then
-            o.oAction = 1
-            nuzlocke_set_character_state(o.oAnimState, NUZLOCKE_CHAR_UNLOCKED)
-        end
+        charSelectObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
+        o.oAction = o.oAction + 1
     elseif o.oAction == 1 then
-        play_char_select_character_sound(nM, char, CHAR_SOUND_YAH_WAH_HOO)
-        obj_set_char_select_animation(o, char, MARIO_ANIM_SINGLE_JUMP)
-        o.oVelY = 30
-        o.oAction = 2
+        if nM and obj_check_hitbox_overlap(o, nM.marioObj) then
+            nuzlocke_set_character_state(o.oAnimState, NUZLOCKE_CHAR_UNLOCKED)
+            o.oAction = o.oAction + 1
+        end
     elseif o.oAction == 2 then
+        charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_YAH_WAH_HOO)
+        charSelectObjs.character_obj_set_animation(o, MARIO_ANIM_SINGLE_JUMP)
+        o.oVelY = 30
+        o.oAction = o.oAction + 1
+    elseif o.oAction == 3 then
         o.oVelY = o.oVelY - 2
         if o.oVelY < -5 then
-            o.oAction = 3 
+            o.oAction = o.oAction + 1
         end
-    elseif o.oAction == 3 then
-        play_char_select_character_sound(nM, char, CHAR_SOUND_HERE_WE_GO)
-        obj_set_char_select_animation(o, char, MARIO_ANIM_DOUBLE_JUMP_RISE)
-        o.oAction = 4
-        
     elseif o.oAction == 4 then
+        charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_HERE_WE_GO)
+        charSelectObjs.character_obj_set_animation(o, MARIO_ANIM_DOUBLE_JUMP_RISE)
+        o.oCharHandState = MARIO_HAND_OPEN
+        o.oAction = o.oAction + 1
+    elseif o.oAction == 5 then
         o.oVelY = o.oVelY + 0.5
         o.oMoveAngleYaw = o.oMoveAngleYaw + math.clamp((o.oVelY + 5)*0x100, 0, 0x1800)
         if o.oVelY > 50 then
@@ -279,166 +252,6 @@ local function bhv_unlockable_char_loop(o)
 end
 
 id_bhvUnlockableChar = hook_behavior(nil, OBJ_LIST_DEFAULT, false, bhv_unlockable_char_init, bhv_unlockable_char_loop)
-
-local modelRevert = {
-    revert = true,
-    eyeState = MARIO_EYES_OPEN,
-    handState = MARIO_HAND_FISTS,
-    punchState = 0,
-    fadeWarpOpacity = 255,
-    torsoAngleX = 0,
-    torsoAngleZ = 0,
-    headAngleX = 0,
-    headAngleY = 0,
-    headAngleZ = 0,
-    headPosX = 0,
-    headPosY = 0,
-    headPosZ = 0,
-    headRotationX = 0,
-    headRotationY = 0,
-    headRotationZ = 0,
-    holpX = 0,
-    holpY = 0,
-    holpZ = 0,
-    heldObj = nil,
-    [PANTS]  = { r = 0, g = 0, b = 0 },
-    [SHIRT]  = { r = 0, g = 0, b = 0 },
-    [GLOVES] = { r = 0, g = 0, b = 0 },
-    [SHOES]  = { r = 0, g = 0, b = 0 },
-    [HAIR]   = { r = 0, g = 0, b = 0 },
-    [SKIN]   = { r = 0, g = 0, b = 0 },
-    [CAP]    = { r = 0, g = 0, b = 0 },
-    [EMBLEM] = { r = 0, g = 0, b = 0 },
-}
-
-local blinkAnim = { 1, 2, 1, 0, 1, 2, 1 }
-
-local function unlockable_char_before_geo_process(node, _)
-    if node == nil or node.hookProcess == 0 then return end
-    local m = gMarioStates[0] ---@type MarioState
-    local np = gNetworkPlayers[0]
-
-    local o = geo_get_current_object()
-    if o == nil or get_id_from_behavior(o.behavior) ~= id_bhvUnlockableChar then return end
-    local nM = nearest_mario_state_to_object(o)
-    local char = charTable[o.oAnimState]
-    local charPalette = charSelect.character_get_current_palette(char[1].ogModel, 1)
-    local anims = charSelect.character_get_animations(char[1].ogModel)
-    if not charPalette then
-        modelRevert.revert = false
-    else
-        modelRevert.revert = true
-        for i = PANTS, EMBLEM do
-            local playerColor = network_player_get_override_palette_color(np, i)
-            modelRevert[i] = {
-                r = playerColor.r,
-                g = playerColor.g,
-                b = playerColor.b,
-            }
-            network_player_set_override_palette_color(np, i, charPalette[i])
-        end
-    end
-
-    modelRevert.eyeState = m.marioBodyState.eyeState
-    modelRevert.handState = m.marioBodyState.handState
-    modelRevert.eyeState = m.marioBodyState.punchState
-    modelRevert.modelState = m.marioBodyState.modelState
-    modelRevert.fadeWarpOpacity = m.fadeWarpOpacity
-    modelRevert.holpX = m.marioBodyState.heldObjLastPosition.x
-    modelRevert.holpY = m.marioBodyState.heldObjLastPosition.y
-    modelRevert.holpZ = m.marioBodyState.heldObjLastPosition.z
-    modelRevert.heldObj = m.heldObj
-    m.heldObj = nil
-    modelRevert.headAngleX = m.marioBodyState.headAngle.x
-    modelRevert.headAngleY = m.marioBodyState.headAngle.y
-    modelRevert.headAngleZ = m.marioBodyState.headAngle.z
-    modelRevert.headPosX = m.marioBodyState.headPos.x
-    modelRevert.headPosY = m.marioBodyState.headPos.y
-    modelRevert.headPosZ = m.marioBodyState.headPos.z
-    modelRevert.headRotationX = m.statusForCamera.headRotation.x
-    modelRevert.headRotationY = m.statusForCamera.headRotation.y
-    modelRevert.headRotationZ = m.statusForCamera.headRotation.z
-
-    -- Set Defaults for Chars
-    local blinkFrame = ((1 * 32 + (get_area_update_counter() + o.oAnimState * 32)) >> 1) & 0x1F;
-    if (blinkFrame < 7) then
-        m.marioBodyState.eyeState = blinkAnim[blinkFrame + 1];
-    else
-        m.marioBodyState.eyeState = MARIO_EYES_OPEN;
-    end
-    m.marioBodyState.handState = o.oAction < 3 and MARIO_HAND_FISTS or MARIO_HAND_OPEN
-    m.marioBodyState.punchState = 0
-    if o.oAction > 2 and o.oVelY >= 30 then
-        m.fadeWarpOpacity = math.round((1 - math.max(o.oVelY - 20, 0)/30)*255)
-        m.marioBodyState.modelState = m.marioBodyState.modelState & ~0xFF;
-        m.marioBodyState.modelState = m.marioBodyState.modelState | (0x100 | m.fadeWarpOpacity);
-    end
-
-    -- Find and apply any custom anims
-    if anims and o.oAction < 1 then
-        if anims.eyes and anims.eyes[charSelect.CS_ANIM_MENU] then
-            m.marioBodyState.eyeState = run_func_or_get_var(anims.eyes[charSelect.CS_ANIM_MENU], m, o.header.gfx.animInfo.animFrame)
-        end
-        if anims.hands and anims.hands[charSelect.CS_ANIM_MENU] then
-            m.marioBodyState.handState = run_func_or_get_var(anims.hands[charSelect.CS_ANIM_MENU], m, o.header.gfx.animInfo.animFrame) or m.marioBodyState.handState
-        end
-    end
-
-    modelRevert.torsoAngleX = m.marioBodyState.torsoAngle.x
-    modelRevert.torsoAngleZ = m.marioBodyState.torsoAngle.z
-    m.marioBodyState.torsoAngle.x = 0
-    m.marioBodyState.torsoAngle.z = 0
-
-    -- can use nM to make them look at you :3
-    m.marioBodyState.headAngle.x = 0
-    m.marioBodyState.headAngle.y = 0
-    m.marioBodyState.headAngle.z = 0
-    m.marioBodyState.headPos.x = 0
-    m.marioBodyState.headPos.y = 0
-    m.marioBodyState.headPos.z = 0
-    m.statusForCamera.headRotation.x = 0
-    m.statusForCamera.headRotation.y = 0
-    m.statusForCamera.headRotation.z = 0
-end
-
-local function unlockable_char_on_geo_process(node, _)
-    if not modelRevert.revert then return end
-    if node == nil or node.hookProcess == 0 then return end
-    local m = gMarioStates[0] ---@type MarioState
-    local np = gNetworkPlayers[0]
-
-    local o = geo_get_current_object()
-    if o == nil or get_id_from_behavior(o.behavior) ~= id_bhvUnlockableChar then return end
-    if modelRevert.revert then
-        for i = PANTS, EMBLEM do
-            network_player_set_override_palette_color(np, i, modelRevert[i])
-        end
-    end
-    
-    m.marioBodyState.eyeState = modelRevert.eyeState
-    m.marioBodyState.handState = modelRevert.handState
-    m.marioBodyState.punchState = modelRevert.punchState
-    m.marioBodyState.modelState = modelRevert.modelState
-    m.fadeWarpOpacity = modelRevert.fadeWarpOpacity
-    m.marioBodyState.torsoAngle.x = modelRevert.torsoAngleX
-    m.marioBodyState.torsoAngle.z = modelRevert.torsoAngleZ
-    m.marioBodyState.heldObjLastPosition.x = modelRevert.holpX
-    m.marioBodyState.heldObjLastPosition.y = modelRevert.holpY
-    m.marioBodyState.heldObjLastPosition.z = modelRevert.holpZ
-    m.heldObj = modelRevert.heldObj
-    m.marioBodyState.headAngle.x = modelRevert.headAngleX
-    m.marioBodyState.headAngle.y = modelRevert.headAngleY
-    m.marioBodyState.headAngle.z = modelRevert.headAngleZ
-    m.marioBodyState.headPos.x = modelRevert.headPosX
-    m.marioBodyState.headPos.y = modelRevert.headPosY
-    m.marioBodyState.headPos.z = modelRevert.headPosZ
-    m.statusForCamera.headRotation.x = modelRevert.headRotationX
-    m.statusForCamera.headRotation.y = modelRevert.headRotationY
-    m.statusForCamera.headRotation.z = modelRevert.headRotationZ
-end
-
-hook_event(HOOK_BEFORE_GEO_PROCESS, unlockable_char_before_geo_process)
-hook_event(HOOK_ON_GEO_PROCESS, unlockable_char_on_geo_process)
 
 local bhvList1ups = {
     id_bhv1Up,
