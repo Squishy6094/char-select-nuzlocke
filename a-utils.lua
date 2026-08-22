@@ -91,7 +91,7 @@ local varToChar = {
 }
 
 function play_char_select_character_sound(m, charData, charSound)
-    if character_get_voice(charData[1].ogModel) then
+    if charSelect.character_get_voice(charData[1].ogModel) then
         local prevModel = charSelect.gCSPlayers[m.playerIndex].modelId
         charSelect.gCSPlayers[m.playerIndex].modelId = charData[1].ogModel
         play_character_sound(m, charSound)
