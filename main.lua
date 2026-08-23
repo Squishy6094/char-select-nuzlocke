@@ -35,7 +35,6 @@ end
 update_save()
 
 local charTable = {}
-local charLevelRng = {}
 
 local function block_menu_in_stages()
     return gNetworkPlayers[0].currCourseNum == 0
@@ -68,36 +67,37 @@ end
 
 -- Map out each level to a character
 local function map_characters()
+    -- Empty table
+    local mappedChars = {}
+    local mappedCharCount = 0
+    for levelNum, levelTable in pairs(charLevelMap) do
+        for areaNum, areaTable in pairs(levelTable) do
+            charLevelMap[levelNum][areaNum] = {}
+        end
+    end
     nuzlocke_seed_rng()
     
-    charLevelRng = {}
-    local mappedCharCount = 0
-    local subArea = 1
     repeat
-        for i = 0, LEVEL_COUNT - 1 do
-            local char = 0
-            repeat
-                local charRepeat = false
-                char = math.random(1, #charTable)
-                for _, area in pairs(charLevelRng) do
-                    for _, areaChar in pairs(area) do
-                        if not charRepeat and char == areaChar then
-                            charRepeat = true
-                        end
-                    end
-                end
-            until not charRepeat
-            if not charLevelRng[i] then
-                charLevelRng[i] = {}
-            end
-            charLevelRng[i][subArea] = char
-            log_to_console("Level " .. i .. " / Area " .. subArea .. " - " .. charTable[char][1].name)
+        for levelNum, levelTable in pairs(charLevelMap) do
+            if mappedCharCount >= #charTable then break end
+            -- Get Random Area
+            local areaNum = 0
+            repeat 
+                areaNum = math.random(1, 7)
+            until levelTable[areaNum]
 
+            -- Get Random Character (without repeats)
+            local charNum = 0
+            repeat 
+                charNum = math.random(1, #charTable)
+            until not mappedChars[charNum]
+            
+            table.insert(levelTable[areaNum], charNum)
+            log_to_console(charTable[charNum][1].name .. " placed in ["..levelNum.."/"..areaNum.."] " .. get_level_name(get_level_course_num(levelNum), levelNum, areaNum))
+            mappedChars[charNum] = true
             mappedCharCount = mappedCharCount + 1
-            if #charTable == mappedCharCount then return end
         end
-        subArea = subArea + 1
-    until #charTable == mappedCharCount
+    until mappedCharCount >= #charTable
 end
 
 local prevUnlockState = {}
@@ -131,6 +131,11 @@ end
 local function reset_save(seed)
     save_file_erase_current_backup_save()
     warp_to_start_level()
+    local oChar = obj_get_first_with_behavior_id(id_bhvUnlockableChar)
+    while oChar do
+        obj_mark_for_deletion(oChar)
+        oChar = obj_get_next_with_same_behavior_id(oChar)
+    end
     update_save(true, seed)
     reset_new_game()
 end
@@ -151,23 +156,25 @@ local function update()
         isDying = false
     end
 
+    --[[
     local m = gMarioStates[0]
     if m.controller.buttonPressed & D_JPAD ~= 0 then
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x + 300, m.pos.y, m.pos.z - 300, function(o)
-            o.oAnimState = CT_CELENA
+            o.oCharNum = CT_CELENA
         end)
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x + 150, m.pos.y, m.pos.z - 300, function(o)
-            o.oAnimState = 2
+            o.oCharNum = 2
         end)
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x + 0, m.pos.y, m.pos.z - 300, function(o)
-            o.oAnimState = 3
+            o.oCharNum = 3
         end)
         spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, m.pos.x - 150, m.pos.y, m.pos.z - 300, function(o)
-            o.oAnimState = 4
+            o.oCharNum = 4
         end)
         spawn_sync_object(id_bhvBreakableBoxSmall, E_MODEL_BREAKABLE_BOX_SMALL, m.pos.x - 300, m.pos.y, m.pos.z - 300, function(o)
         end)
     end
+    ]]
 
     if network_is_server() then
         local charList = ""
@@ -193,7 +200,6 @@ end
 
 ---@param o Object
 local function bhv_unlockable_char_init(o)
-    o.oCharNum = o.oAnimState
     o.oCharAlt = 1
     o.oCharPalette = 1
     if nuzlocke_get_character_state(o.oCharNum) ~= NUZLOCKE_CHAR_LOCKED then
@@ -205,11 +211,11 @@ local function bhv_unlockable_char_init(o)
     o.hitboxRadius = 80
     o.hitboxHeight = 160
     tagColor = {
-        r = charTable[o.oAnimState][1].color.r * 0.5 + 127,
-        g = charTable[o.oAnimState][1].color.g * 0.5 + 127,
-        b = charTable[o.oAnimState][1].color.b * 0.5 + 127,
+        r = charTable[o.oCharNum][1].color.r * 0.5 + 127,
+        g = charTable[o.oCharNum][1].color.g * 0.5 + 127,
+        b = charTable[o.oCharNum][1].color.b * 0.5 + 127,
     }
-    oTagLib.obj_set_nametag(o, charTable[o.oAnimState].nickname, tagColor)
+    oTagLib.obj_set_nametag(o, charTable[o.oCharNum].nickname, tagColor)
 end
 
 ---@param o Object
@@ -223,7 +229,7 @@ local function bhv_unlockable_char_loop(o)
         o.oAction = o.oAction + 1
     elseif o.oAction == 1 then
         if nM and obj_check_hitbox_overlap(o, nM.marioObj) then
-            nuzlocke_set_character_state(o.oAnimState, NUZLOCKE_CHAR_UNLOCKED)
+            nuzlocke_set_character_state(o.oCharNum, NUZLOCKE_CHAR_UNLOCKED)
             o.oAction = o.oAction + 1
         end
     elseif o.oAction == 2 then
@@ -253,49 +259,72 @@ end
 
 id_bhvUnlockableChar = hook_behavior(nil, OBJ_LIST_DEFAULT, false, bhv_unlockable_char_init, bhv_unlockable_char_loop)
 
-local bhvList1ups = {
-    id_bhv1Up,
-    id_bhv1upJumpOnApproach,
-    id_bhv1upRunningAway,
-    id_bhv1upSliding,
-    id_bhv1upWalking,
+local function find_character_spawn()
+    local spawnPos = nil
+    local minX = -0x8000
+    local maxX = 0x8000
+    local minZ = -0x8000
+    local maxZ = 0x8000
+    local spawnStart = get_time()
+    local spawnIteration = 0
+    while spawnPos == nil do
+        local spawnStep = 0
+        spawnIteration = spawnIteration + 1
+        local rayFloor = collision_find_surface_on_ray(math.random(minX, maxX), 0x4000, math.random(minZ, maxZ), 0, -0x8000, 0, 1)
+        if rayFloor.surface and not evilFloorTypes[rayFloor.surface.type] and rayFloor.surface.normal.y > 0.95 and (rayFloor.hitPos.y > find_water_level(rayFloor.hitPos.x, rayFloor.hitPos.z) or spawnIteration > 1000) then
+            spawnStep = spawnStep + 1
+            local surfaceX = (rayFloor.surface.vertex1.x + rayFloor.surface.vertex2.x + rayFloor.surface.vertex3.x)/3
+            local surfaceY = (rayFloor.surface.vertex1.y + rayFloor.surface.vertex2.y + rayFloor.surface.vertex3.y)/3
+            local surfaceZ = (rayFloor.surface.vertex1.z + rayFloor.surface.vertex2.z + rayFloor.surface.vertex3.z)/3
 
-    id_bhvHidden1up,
-    id_bhvHidden1upInPole,
-    id_bhvHidden1upInPoleSpawner,
+            local nearestChar = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvUnlockableChar)
 
-    id_bhvStar,
-    id_bhvStarSpawnCoordinates,
-    id_bhvHiddenStar,
-    id_bhvRedCoinStarMarker
-}
+            local smallestEdge = nil
+            for i = 0, 2 do
+                local currNum = (i%3) + 1
+                local nextNum = ((i+1)%3) + 1
+                local currPos = rayFloor.surface["vertex"..tostring(currNum)]
+                local nextPos = rayFloor.surface["vertex"..tostring(nextNum)]
+                local edgeDist = math.sqrt((currPos.x - nextPos.x)^2 + (currPos.z - nextPos.z)^2)
+                if not smallestEdge or smallestEdge > edgeDist then
+                    smallestEdge = edgeDist
+                end
+            end
+
+            if (not nearestChar or dist_between_object_and_point(nearestChar, surfaceX, surfaceY, surfaceZ) > 500) and (smallestEdge > math.max(1500 - math.floor(spawnIteration/250)*100, 100)) then --- math.floor(spawnIteration/100)*100 then
+                spawnStep = spawnStep + 1
+                spawnPos = {
+                    x = surfaceX,
+                    y = surfaceY,
+                    z = surfaceZ,
+                    yaw = 0,
+                }
+            end
+        end 
+
+        if get_time() - spawnStart > 10 then
+            log_to_console(tostring("Character Select Nuzlocke: Character took 10 Seconds after "..tostring(spawnIteration).." iterations, got stuck on Step "..tostring(spawnStep)..", giving up."), CONSOLE_MESSAGE_ERROR)
+            return {x = 0, y = 0, z = 0, yaw = 0}
+        end
+    end
+
+    log_to_console(tostring("Character Select Nuzlocke: Character Spawned at ("..math.round(spawnPos.x)..", "..math.round(spawnPos.y)..", "..math.round(spawnPos.z)..") in [Level "..gNetworkPlayers[0].currLevelNum.." / Area "..gNetworkPlayers[0].currAreaIndex.."] on iteration "..tostring(spawnIteration)..", Took "..tostring(get_time() - spawnStart).." Seconds."))
+    return spawnPos
+end
 
 local function on_sync()
     local m = gMarioStates[0]
     local currLevel = gNetworkPlayers[0].currLevelNum
     local currArea = gNetworkPlayers[0].currAreaIndex
-    if not charLevelRng[currLevel] or not charLevelRng[currLevel][currArea] then return end
-    local spawnPosList = {}
-    for _, bhvId in pairs(bhvList1ups) do
-        local o1up = obj_get_first_with_behavior_id(bhvId)
-        while o1up ~= nil do
-            local floorHeight, floor = find_floor(o1up.oPosX, o1up.oPosY, o1up.oPosZ)
-            --local angle = math.random(0, 0x10000)
-            table.insert(spawnPosList, {
-                x = (floor.vertex1.x + floor.vertex2.x + floor.vertex3.x)/3,
-                y = (floor.vertex1.y + floor.vertex2.y + floor.vertex3.y)/3,
-                z = (floor.vertex1.z + floor.vertex2.z + floor.vertex3.z)/3
-            })
-            o1up = obj_get_next_with_same_behavior_id(o1up)
-        end
+    if not charLevelMap[currLevel] or not charLevelMap[currLevel][currArea] then return end
+    --if obj_get_first_with_behavior_id(id_bhvUnlockableChar) then return end
+    nuzlocke_seed_rng(currLevel*currArea)
+    for i, charNum in pairs(charLevelMap[currLevel][currArea]) do
+        local spawnPos = find_character_spawn()
+        spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, spawnPos.x, spawnPos.y, spawnPos.z, function(o)
+            o.oCharNum = charNum
+        end)
     end
-    if #spawnPosList == 0 then return end
-    nuzlocke_seed_rng()
-    local spawnPos = spawnPosList[math.random(1, #spawnPosList)]
-
-    spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, spawnPos.x, spawnPos.y, spawnPos.z, function(o)
-        o.oAnimState = charLevelRng[currLevel][currArea]
-    end)
 end
 
 local function hud_render_behind()
