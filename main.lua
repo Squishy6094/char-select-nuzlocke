@@ -277,7 +277,8 @@ local function find_character_spawn()
             local surfaceY = (rayFloor.surface.vertex1.y + rayFloor.surface.vertex2.y + rayFloor.surface.vertex3.y)/3
             local surfaceZ = (rayFloor.surface.vertex1.z + rayFloor.surface.vertex2.z + rayFloor.surface.vertex3.z)/3
 
-            local nearestChar = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvUnlockableChar)
+            local avoidChar = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvUnlockableChar)
+            local avoidDoorWarp = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvDoorWarp)
 
             local smallestEdge = nil
             for i = 0, 2 do
@@ -291,14 +292,36 @@ local function find_character_spawn()
                 end
             end
 
-            if (not nearestChar or dist_between_object_and_point(nearestChar, surfaceX, surfaceY, surfaceZ) > 500) and (smallestEdge > math.max(1500 - math.floor(spawnIteration/250)*100, 100)) then --- math.floor(spawnIteration/100)*100 then
-                spawnStep = spawnStep + 1
-                spawnPos = {
-                    x = surfaceX,
-                    y = surfaceY,
-                    z = surfaceZ,
-                    yaw = 0,
-                }
+            local avoidDist = math.min(avoidChar and dist_between_object_and_point(avoidChar, surfaceX, surfaceY, surfaceZ) or 0x8000,
+                avoidDoorWarp and dist_between_object_and_point(avoidDoorWarp, surfaceX, surfaceY, surfaceZ) or 0x8000)
+
+            if (avoidDist > 500 or spawnIteration > 5000) and (smallestEdge > math.max(1500 - math.floor(spawnIteration/250)*100, 100)) then --- math.floor(spawnIteration/100)*100 then
+                local outofBounds = false
+                for i = 0, 7 do
+                    if not outofBounds then
+                        local angle = i/8*0x10000
+                        local ray = collision_find_surface_on_ray(surfaceX, surfaceY + 200, surfaceZ, sins(angle)*2000, 0, coss(angle)*2000)
+
+                        if ray.surface then
+                            local surfaceAngle = atan2s(ray.surface.normal.z, ray.surface.normal.x)
+                            if math.abs(math.s16(surfaceAngle - angle)) < 0x1000 then
+                                spawn_non_sync_object(id_bhvStaticObject, E_MODEL_SPARKLES, ray.hitPos.x, ray.hitPos.y, ray.hitPos.z, function(o)
+                                    obj_set_billboard(o)
+                                end)
+                                outofBounds = true
+                            end
+                        end
+                    end
+                end
+                if not outofBounds then
+                    spawnStep = spawnStep + 1
+                    spawnPos = {
+                        x = surfaceX,
+                        y = surfaceY,
+                        z = surfaceZ,
+                        yaw = 0,
+                    }
+                end
             end
         end 
 
@@ -317,6 +340,7 @@ local function on_sync()
     local currLevel = gNetworkPlayers[0].currLevelNum
     local currArea = gNetworkPlayers[0].currAreaIndex
     if not charLevelMap[currLevel] or not charLevelMap[currLevel][currArea] then return end
+    if obj_get_first_with_behavior_id(id_bhvActSelector) then return end
     --if obj_get_first_with_behavior_id(id_bhvUnlockableChar) then return end
     nuzlocke_seed_rng(currLevel*currArea)
     for i, charNum in pairs(charLevelMap[currLevel][currArea]) do
@@ -325,10 +349,19 @@ local function on_sync()
             o.oCharNum = charNum
         end)
     end
+
+    --[[
+    for i = 0, 10 do
+        local spawnPos = find_character_spawn()
+        spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, spawnPos.x, spawnPos.y, spawnPos.z, function(o)
+            o.oCharNum = 1
+        end)
+    end
+    ]]
 end
 
-local function hud_render_behind()
-    local totalCharacters = nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED)
+local function set_lives_counter()
+    local totalCharacters = nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) - 1
     gMarioStates[0].numLives = totalCharacters
     hud_set_value(HUD_DISPLAY_LIVES, totalCharacters)
 end
@@ -336,7 +369,7 @@ end
 hook_event(HOOK_UPDATE, update)
 hook_event(HOOK_ON_DEATH, queue_char_kill)
 hook_event(HOOK_ON_SYNC_VALID, on_sync)
-hook_event(HOOK_ON_HUD_RENDER_BEHIND, hud_render_behind)
+hook_event(HOOK_MARIO_UPDATE, set_lives_counter)
 _G.charSelect.hook_allow_menu_open(block_menu_in_stages)
 
 local function set_seed(msg)
