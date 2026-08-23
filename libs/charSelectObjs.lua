@@ -1,4 +1,10 @@
-if not charSelectExists then return end
+local function run_func_or_get_var(x, ...)
+    if type(x) == "function" then
+        return x(...)
+    else
+        return x
+    end
+end
 
 ---@class Object
 ---@field oIsChar integer
@@ -17,7 +23,7 @@ define_custom_obj_fields({
     oCharHandState = "f32",
 })
 
-local characterTable = charSelect.character_get_full_table()
+local characterTable = charSelectExists and charSelect.character_get_full_table() or nil
 local m = gMarioStates[0] ---@type MarioState
 local np = gNetworkPlayers[0] ---@type NetworkPlayer
 local varToChar = {
@@ -69,13 +75,16 @@ local varToChar = {
 
 local function character_obj_set_animation(o, animID)
     if not o or o.oIsChar == 0 then return end
-    local char = characterTable[o.oCharNum][o.oCharAlt]
-    local anims = charSelect.character_get_animations(char.model)
+    local anims = nil
     local animIDFallback = nil
+    if charSelectExists then
+        local char = characterTable[o.oCharNum][o.oCharAlt]
+        anims = charSelect.character_get_animations(char.model)
+        if animID == charSelect.CS_ANIM_MENU then
+            animIDFallback = CHAR_ANIM_FIRST_PERSON
+        end 
+    end
     o.oCharAnim = animID
-    if animID == charSelect.CS_ANIM_MENU then
-        animIDFallback = CHAR_ANIM_FIRST_PERSON
-    end 
 
     if anims and anims.anims then
         if anims.anims[animID] then
@@ -88,14 +97,12 @@ local function character_obj_set_animation(o, animID)
     else
         o.header.gfx.animInfo.curAnim = animIDFallback and get_mario_vanilla_animation(animIDFallback) or get_mario_vanilla_animation(animID)
     end
-    if o.header.gfx.animInfo.curAnim ~= nil then
-        o.header.gfx.animInfo.animYTrans = o.header.gfx.animInfo.curAnim.animYTransDivisor 
-    end
     o.header.gfx.animInfo.animFrame = 0
     o.header.gfx.animInfo.animTimer = 0
 end
 
 local function character_obj_play_sound(o, charSound)
+    if not charSelectExists then return end
     if not o or o.oIsChar == 0 then return end
     local char = characterTable[o.oCharNum][o.oCharAlt]
     if charSelect.character_get_voice(char.model) then
@@ -120,9 +127,14 @@ end
 
 local function character_obj_loop(o)
     o.oIsChar = 1
-    obj_set_model_extended(o, characterTable[o.oCharNum][o.oCharAlt].model)
+    if charSelectExists then
+        obj_set_model_extended(o, characterTable[o.oCharNum][o.oCharAlt].model)
+    end
     if o.header ~= nil and o.header.gfx ~= nil and o.header.gfx.sharedChild ~= nil then
         o.header.gfx.sharedChild.hookProcess = 1
+    end
+    if o.header.gfx.animInfo.curAnim ~= nil then
+        o.header.gfx.animInfo.animYTrans = o.header.gfx.animInfo.curAnim.animYTransDivisor 
     end
 end
 
@@ -168,14 +180,31 @@ local blinkAnim = {
     MARIO_EYES_HALF_CLOSED
 }
 
+local fallbackPalette = {
+    [PANTS]  = { r = 0x00, g = 0x00, b = 0xff },
+    [SHIRT]  = { r = 0xff, g = 0x00, b = 0x00 },
+    [GLOVES] = { r = 0xff, g = 0xff, b = 0xff },
+    [SHOES]  = { r = 0x72, g = 0x1c, b = 0x0e },
+    [HAIR]   = { r = 0x73, g = 0x06, b = 0x00 },
+    [SKIN]   = { r = 0xfe, g = 0xc1, b = 0x79 },
+    [CAP]    = { r = 0xff, g = 0x00, b = 0x00 },
+    [EMBLEM] = { r = 0xff, g = 0x00, b = 0x00 },
+}
+
 local function character_obj_before_geo_process(node, _)
     if node == nil or node.hookProcess == 0 then return end
     local o = geo_get_current_object()
     if o == nil or o.oIsChar == 0 then return end
-    local char = characterTable[o.oCharNum][o.oCharAlt]
-    local model = char.model
-    local charPalette = charSelect.character_get_current_palette(model, 1)
-    local anims = charSelect.character_get_animations(model)
+    local charPalette = fallbackPalette
+    local anims
+    if charSelectExists then
+        local model = characterTable[o.oCharNum][o.oCharAlt].model
+        local charSelectPalette = charSelect.character_get_current_palette(model, 1)
+        if charSelectPalette then
+            charPalette = charSelectPalette
+        end
+        anims = charSelect.character_get_animations(model)
+    end
     if not charPalette then
         modelRevert.revert = false
     else
