@@ -131,6 +131,7 @@ end
 local function reset_save(seed)
     save_file_erase_current_backup_save()
     warp_to_start_level()
+    gMarioStates[0].health = 0x880
     local oChar = obj_get_first_with_behavior_id(id_bhvUnlockableChar)
     while oChar do
         obj_mark_for_deletion(oChar)
