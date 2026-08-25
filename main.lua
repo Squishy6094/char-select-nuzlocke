@@ -277,31 +277,39 @@ end
 
 id_bhvCharGraffiti = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_char_graffiti_init, bhv_char_graffiti_loop)
 
-local fe_mat = gfx_get_from_name("mat_char_graffiti_graffiti")
+local graffiti_mesh_layer = gfx_get_from_name("char_graffiti_char_graffiti_mesh_layer_5")
+local graffiti_mat = gfx_get_from_name("mat_char_graffiti_graffiti")
+
 local changed_objects = {}
----@param node GraphNode
 function graffiti_geo_func(node, matStackIndex)
     local o = geo_get_current_object()
 
     local ptr = o._pointer
-    local geo = cast_graph_node(node.next.next.next)
+    local geo = cast_graph_node(node.next)
+    ---@cast geo GraphNodeDisplayList
 
-    local dlHead = gfx_get_from_name("graffiti_displaylist" .. ptr)
-    if not dlHead then
-        dlHead = gfx_create("graffiti_displaylist" .. ptr, 16)
-        gfx_copy(dlHead, fe_mat, gfx_get_length(fe_mat))
+    local meshRoot = gfx_get_from_name("graffiti_dl_mesh_layer" .. o.oCharNum)
+    if not meshRoot then
+        meshRoot = gfx_create("graffiti_dl_mesh_layer" .. o.oCharNum, gfx_get_length(graffiti_mesh_layer))
+        gfx_copy(meshRoot, graffiti_mesh_layer, gfx_get_length(graffiti_mesh_layer))
+    end
+
+    local matRoot = gfx_get_from_name("graffiti_dl_mat" .. o.oCharNum)
+    if not matRoot then
+        matRoot = gfx_create("graffiti_dl_mat" .. o.oCharNum, gfx_get_length(graffiti_mat))
+        gfx_copy(matRoot, graffiti_mat, gfx_get_length(graffiti_mat))
     end
     
     if not changed_objects[o] then
-        local cmdt = gfx_get_command(dlHead, 6)
-        local texture = get_texture_info("char_select_graffiti_invert")--charSelect.character_get_graffiti(0) ---@type TextureInfo
-        djui_chat_message_create("i'm RUNNINGG!!")
-        gfx_set_command(cmdt, "gsDPSetTextureImage(%i, %i, 1, %t)", texture.format, texture.size, texture.texture)
-        
+        local cmdMat = gfx_get_command(matRoot, 9)
+        local texture = charSelect.character_get_graffiti(o.oCharNum)
+        gfx_set_command(cmdMat, "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b_LOAD_BLOCK, 1, %t)", texture.texture)
+
+        local cmdMesh = gfx_get_command(meshRoot, 4)
+        gfx_set_command(cmdMesh, "gsSPDisplayList(%g)", matRoot)
         changed_objects[o] = true
     end
-
-    --geo.displayList = dlHead
+    geo.displayList = meshRoot
 end
 
 local function obj_unload(o)
@@ -456,7 +464,7 @@ local function on_sync()
                 o.oFaceAngleYaw = slopeAngle + tilt
                 
                 --o.oFaceAngleRoll = math.random(-0x1000, 0x1000)
-                obj_scale(o, 1 + math.random()*0.5)
+                obj_scale(o, math.random(1, 6)*0.5)
                 o.oCharNum = charNum
             end)
         end
