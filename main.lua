@@ -276,11 +276,12 @@ id_bhvCharGraffiti = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_char_graff
 
 local fe_mat = gfx_get_from_name("mat_char_graffiti_graffiti")
 local changed_objects = {}
+---@param node GraphNode
 function graffiti_geo_func(node, matStackIndex)
     local o = geo_get_current_object()
 
     local ptr = o._pointer
-    local geo = cast_graph_node(node.next)
+    local geo = cast_graph_node(node.next.next.next)
 
     local dlHead = gfx_get_from_name("graffiti_displaylist" .. ptr)
     if not dlHead then
@@ -293,10 +294,11 @@ function graffiti_geo_func(node, matStackIndex)
         local texture = get_texture_info("char_select_graffiti_invert")--charSelect.character_get_graffiti(0) ---@type TextureInfo
         djui_chat_message_create("i'm RUNNINGG!!")
         gfx_set_command(cmdt, "gsDPSetTextureImage(%i, %i, 1, %t)", texture.format, texture.size, texture.texture)
+        
         changed_objects[o] = true
     end
 
-    geo.displayList = fe_mat
+    --geo.displayList = dlHead
 end
 
 local function obj_unload(o)

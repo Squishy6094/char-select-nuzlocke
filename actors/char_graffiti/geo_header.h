@@ -1,10 +1,10 @@
 extern const GeoLayout char_graffiti_geo[];
 extern Lights1 char_graffiti_graffiti_lights;
 extern u8 char_graffiti_char_select_graffiti_default_rgba16[];
-extern Vtx char_graffiti_char_graffiti_mesh_layer_4_vtx_cull[8];
-extern Vtx char_graffiti_char_graffiti_mesh_layer_4_vtx_0[4];
-extern Gfx char_graffiti_char_graffiti_mesh_layer_4_tri_0[];
+extern Vtx char_graffiti_char_graffiti_mesh_layer_5_vtx_cull[8];
+extern Vtx char_graffiti_char_graffiti_mesh_layer_5_vtx_0[4];
+extern Gfx char_graffiti_char_graffiti_mesh_layer_5_tri_0[];
 extern Gfx mat_char_graffiti_graffiti[];
 extern Gfx mat_revert_char_graffiti_graffiti[];
-extern Gfx char_graffiti_char_graffiti_mesh_layer_4[];
-extern Gfx char_graffiti_final_revert_mesh_layer_4[];
+extern Gfx char_graffiti_char_graffiti_mesh_layer_5[];
+extern Gfx char_graffiti_final_revert_mesh_layer_5[];

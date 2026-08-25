@@ -16390,7 +16390,7 @@ Texture char_graffiti_char_select_graffiti_default_rgba16[] = {
 	
 };
 
-Vtx char_graffiti_char_graffiti_mesh_layer_4_vtx_cull[8] = {
+Vtx char_graffiti_char_graffiti_mesh_layer_5_vtx_cull[8] = {
 	{{{-100, 1, 100}, 0, {0, 0}, {0x00, 0x00, 0x00, 0x00}}},
 	{{{-100, 1, 100}, 0, {0, 0}, {0x00, 0x00, 0x00, 0x00}}},
 	{{{-100, 1, -100}, 0, {0, 0}, {0x00, 0x00, 0x00, 0x00}}},
@@ -16401,15 +16401,15 @@ Vtx char_graffiti_char_graffiti_mesh_layer_4_vtx_cull[8] = {
 	{{{100, 1, -100}, 0, {0, 0}, {0x00, 0x00, 0x00, 0x00}}},
 };
 
-Vtx char_graffiti_char_graffiti_mesh_layer_4_vtx_0[4] = {
+Vtx char_graffiti_char_graffiti_mesh_layer_5_vtx_0[4] = {
 	{{{-100, 1, 100}, 0, {-16, 8176}, {0x00, 0x7F, 0x00, 0xFF}}},
 	{{{100, 1, 100}, 0, {8176, 8176}, {0x00, 0x7F, 0x00, 0xFF}}},
 	{{{100, 1, -100}, 0, {8176, -16}, {0x00, 0x7F, 0x00, 0xFF}}},
 	{{{-100, 1, -100}, 0, {-16, -16}, {0x00, 0x7F, 0x00, 0xFF}}},
 };
 
-Gfx char_graffiti_char_graffiti_mesh_layer_4_tri_0[] = {
-	gsSPVertex(char_graffiti_char_graffiti_mesh_layer_4_vtx_0 + 0, 4, 0),
+Gfx char_graffiti_char_graffiti_mesh_layer_5_tri_0[] = {
+	gsSPVertex(char_graffiti_char_graffiti_mesh_layer_5_vtx_0 + 0, 4, 0),
 	gsSP2Triangles(0, 1, 2, 0, 0, 2, 3, 0),
 	gsSPEndDisplayList(),
 };
@@ -16419,13 +16419,14 @@ Gfx mat_char_graffiti_graffiti[] = {
 	gsSPClearGeometryMode(G_CULL_BACK),
 	gsSPSetLights1(char_graffiti_graffiti_lights),
 	gsDPPipeSync(),
-	gsDPSetCombineLERP(TEXEL0, 0, SHADE, 0, TEXEL0, 0, ENVIRONMENT, 0, TEXEL0, 0, SHADE, 0, TEXEL0, 0, ENVIRONMENT, 0),
+	gsDPSetCombineLERP(TEXEL0, 0, SHADE, 0, TEXEL0, 0, PRIMITIVE, 0, TEXEL0, 0, SHADE, 0, TEXEL0, 0, PRIMITIVE, 0),
 	gsDPSetAlphaDither(G_AD_NOISE),
 	gsSPTexture(65535, 65535, 0, 0, 1),
+	gsDPSetPrimColor(0, 0, 255, 255, 255, 255),
 	gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b_LOAD_BLOCK, 1, char_graffiti_char_select_graffiti_default_rgba16),
 	gsDPSetTile(G_IM_FMT_RGBA, G_IM_SIZ_16b_LOAD_BLOCK, 0, 0, 7, 0, G_TX_WRAP | G_TX_NOMIRROR, 0, 0, G_TX_WRAP | G_TX_NOMIRROR, 0, 0),
 	gsDPLoadBlock(7, 0, 0, 65535, 32),
-	gsDPSetTile(G_IM_FMT_RGBA, G_IM_SIZ_16b, 64, 0, 0, 0, G_TX_CLAMP | G_TX_NOMIRROR, 8, 0, G_TX_CLAMP | G_TX_NOMIRROR, 8, 0),
+	gsDPSetTile(G_IM_FMT_RGBA, G_IM_SIZ_16b, 64, 0, 0, 0, G_TX_WRAP | G_TX_NOMIRROR, 8, 0, G_TX_WRAP | G_TX_NOMIRROR, 8, 0),
 	gsDPSetTileSize(0, 0, 0, 1020, 1020),
 	gsSPEndDisplayList(),
 };
@@ -16437,18 +16438,18 @@ Gfx mat_revert_char_graffiti_graffiti[] = {
 	gsSPEndDisplayList(),
 };
 
-Gfx char_graffiti_char_graffiti_mesh_layer_4[] = {
+Gfx char_graffiti_char_graffiti_mesh_layer_5[] = {
 	gsSPClearGeometryMode(G_LIGHTING),
-	gsSPVertex(char_graffiti_char_graffiti_mesh_layer_4_vtx_cull + 0, 8, 0),
+	gsSPVertex(char_graffiti_char_graffiti_mesh_layer_5_vtx_cull + 0, 8, 0),
 	gsSPSetGeometryMode(G_LIGHTING),
 	gsSPCullDisplayList(0, 7),
 	gsSPDisplayList(mat_char_graffiti_graffiti),
-	gsSPDisplayList(char_graffiti_char_graffiti_mesh_layer_4_tri_0),
+	gsSPDisplayList(char_graffiti_char_graffiti_mesh_layer_5_tri_0),
 	gsSPDisplayList(mat_revert_char_graffiti_graffiti),
 	gsSPEndDisplayList(),
 };
 
-Gfx char_graffiti_final_revert_mesh_layer_4[] = {
+Gfx char_graffiti_final_revert_mesh_layer_5[] = {
 	gsDPPipeSync(),
 	gsSPSetGeometryMode(G_LIGHTING),
 	gsSPClearGeometryMode(G_TEXTURE_GEN),
