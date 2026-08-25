@@ -263,6 +263,7 @@ id_bhvUnlockableChar = hook_behavior(nil, OBJ_LIST_DEFAULT, false, bhv_unlockabl
 local E_MODEL_GRAFFITI = smlua_model_util_get_id("char_graffiti_geo")
 
 local function bhv_char_graffiti_init(o)
+    o.oFlags = OBJ_FLAG_UPDATE_GFX_POS_AND_ANGLE
     if nuzlocke_get_character_state(o.oCharNum) ~= NUZLOCKE_CHAR_LOCKED then
         obj_mark_for_deletion(o)
         return
@@ -270,6 +271,8 @@ local function bhv_char_graffiti_init(o)
 end
 
 local function bhv_char_graffiti_loop(o)
+    --o.oFaceAngleYaw = o.oVelY - (get_global_timer()%90)/90*0x1000
+    --djui_chat_message_create(tostring(math.floor((get_global_timer()%90)/90*0x1000/0x100)))
 end
 
 id_bhvCharGraffiti = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_char_graffiti_init, bhv_char_graffiti_loop)
@@ -385,23 +388,43 @@ local function find_character_spawn()
     return spawnPos
 end
 
-local function find_griffiti_spawn()
+local function find_griffiti_spawn(charObj)
     local m = gMarioStates[0] ---@type MarioState
     local spawnPos = nil
+    local spawnIteration = 0
+    local startPos = {
+        x = m.spawnInfo.startPos.x,
+        y = m.spawnInfo.startPos.y,
+        z = m.spawnInfo.startPos.z
+    }
     repeat
+        spawnIteration = spawnIteration + 1
+        if spawnIteration > 1000 and charObj then
+            startPos.x = charObj.oPosX
+            startPos.y = charObj.oPosY
+            startPos.z = charObj.oPosZ
+            spawnIteration = 0
+        end
         local angleYaw = math.random(0, 0x10000)
-        local ray = collision_find_surface_on_ray(m.spawnInfo.startPos.x, m.spawnInfo.startPos.y, m.spawnInfo.startPos.z, sins(angleYaw)*2000, (math.random()-0.5)*2000, coss(angleYaw)*2000)
-        if ray.surface ~= nil then
-            spawnPos = {
-                x = ray.hitPos.x,
-                y = ray.hitPos.y,
-                z = ray.hitPos.z,
-                normal = {
-                    x = ray.surface.normal.x,
-                    y = ray.surface.normal.y,
-                    z = ray.surface.normal.z,
+        local floorHeight = find_floor(startPos.x, startPos.y, startPos.z)
+        local ray = collision_find_surface_on_ray(startPos.x, floorHeight + 100, startPos.z, sins(angleYaw)*2000, math.random()*500 - spawnIteration, coss(angleYaw)*2000)
+        if ray.surface ~= nil and not evilFloorTypes[ray.surface.type] then
+            local spawnX = ((ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3 + ray.hitPos.x)*0.5
+            local spawnY = ((ray.surface.vertex1.y + ray.surface.vertex2.y + ray.surface.vertex3.y)/3 + ray.hitPos.y)*0.5
+            local spawnZ = ((ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3 + ray.hitPos.z)*0.5
+            local avoidGraffiti = nearest_object_with_behavior_id_to_pos(spawnX, spawnY, spawnZ, id_bhvCharGraffiti)
+            if not avoidGraffiti or dist_between_object_and_point(avoidGraffiti, spawnX, spawnY, spawnZ) > 200 then
+                spawnPos = {
+                    x = spawnX,
+                    y = spawnY,
+                    z = spawnZ,
+                    normal = {
+                        x = ray.surface.normal.x,
+                        y = ray.surface.normal.y,
+                        z = ray.surface.normal.z,
+                    }
                 }
-            }
+            end
         end
     until spawnPos ~= nil
 
@@ -418,16 +441,25 @@ local function on_sync()
     nuzlocke_seed_rng(currLevel*currArea)
     for i, charNum in pairs(charLevelMap[currLevel][currArea]) do
         local charSpawn = find_character_spawn()
-        spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, charSpawn.x, charSpawn.y, charSpawn.z, function(o)
+        local charObj spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, charSpawn.x, charSpawn.y, charSpawn.z, function(o)
             o.oCharNum = charNum
         end)
-        local graffitiSpawn = find_griffiti_spawn()
-        spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
-            local vecZero = {x = 0, y = 0, z = 0}
-            o.oFaceAnglePitch = 0x4000-calculate_pitch(vecZero, graffitiSpawn.normal)
-            o.oFaceAngleYaw = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
-            o.oCharNum = charNum
-        end)
+        for i = 1, math.random(1, 3) do
+            local graffitiSpawn = find_griffiti_spawn(charObj)
+            spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
+                local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
+                local tilt = 0
+                local pitch = atan2s(math.sqrt(graffitiSpawn.normal.x * graffitiSpawn.normal.x + graffitiSpawn.normal.z * graffitiSpawn.normal.z), graffitiSpawn.normal.y)
+                djui_chat_message_create(tostring(pitch))
+                o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
+                o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
+                o.oFaceAngleYaw = slopeAngle + tilt
+                
+                --o.oFaceAngleRoll = math.random(-0x1000, 0x1000)
+                obj_scale(o, 1 + math.random()*0.5)
+                o.oCharNum = charNum
+            end)
+        end
     end
 
     --[[
