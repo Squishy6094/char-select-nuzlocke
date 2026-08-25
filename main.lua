@@ -62,7 +62,7 @@ end
 
 local function nuzlocke_seed_rng(offset)
     offset = offset or 0
-    math.randomseed(gGlobalSyncTable.nuzlockeSeed + offset)
+    math.randomseed((gGlobalSyncTable.nuzlockeSeed + offset)%SEED_MAX)
 end
 
 -- Map out each level to a character
@@ -260,6 +260,52 @@ end
 
 id_bhvUnlockableChar = hook_behavior(nil, OBJ_LIST_DEFAULT, false, bhv_unlockable_char_init, bhv_unlockable_char_loop)
 
+local E_MODEL_GRAFFITI = smlua_model_util_get_id("char_graffiti_geo")
+
+local function bhv_char_graffiti_init(o)
+    if nuzlocke_get_character_state(o.oCharNum) ~= NUZLOCKE_CHAR_LOCKED then
+        obj_mark_for_deletion(o)
+        return
+    end
+end
+
+local function bhv_char_graffiti_loop(o)
+end
+
+id_bhvCharGraffiti = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_char_graffiti_init, bhv_char_graffiti_loop)
+
+local fe_mat = gfx_get_from_name("mat_char_graffiti_graffiti")
+local changed_objects = {}
+function graffiti_geo_func(node, matStackIndex)
+    local o = geo_get_current_object()
+
+    local ptr = o._pointer
+    local geo = cast_graph_node(node.next)
+
+    local dlHead = gfx_get_from_name("graffiti_displaylist" .. ptr)
+    if not dlHead then
+        dlHead = gfx_create("graffiti_displaylist" .. ptr, 16)
+        gfx_copy(dlHead, fe_mat, gfx_get_length(fe_mat))
+    end
+    
+    if not changed_objects[o] then
+        local cmdt = gfx_get_command(dlHead, 7)
+        local texture = charSelect.character_get_graffiti(0) ---@type TextureInfo
+        gfx_set_command(cmdt, "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b_LOAD_BLOCK, 1, %t)", texture.texture)
+        changed_objects[o] = true
+    end
+
+    geo.displayList = dlHead
+end
+
+local function obj_unload(o)
+    if changed_objects[o] then
+        changed_objects[o] = nil
+    end
+end
+
+hook_event(HOOK_ON_OBJECT_UNLOAD, obj_unload)
+
 local function find_character_spawn()
     local spawnPos = nil
     local minX = -0x8000
@@ -296,7 +342,7 @@ local function find_character_spawn()
             local avoidDist = math.min(avoidChar and dist_between_object_and_point(avoidChar, surfaceX, surfaceY, surfaceZ) or 0x8000,
                 avoidDoorWarp and dist_between_object_and_point(avoidDoorWarp, surfaceX, surfaceY, surfaceZ) or 0x8000)
 
-            if (avoidDist > 500 or spawnIteration > 5000) and (smallestEdge > math.max(1500 - math.floor(spawnIteration/250)*100, 100)) then --- math.floor(spawnIteration/100)*100 then
+            if (avoidDist > 500 or spawnIteration > 5000) and (smallestEdge < (100 + spawnIteration)) then --- math.floor(spawnIteration/100)*100 then
                 local outofBounds = false
                 for i = 0, 7 do
                     if not outofBounds then
@@ -336,6 +382,27 @@ local function find_character_spawn()
     return spawnPos
 end
 
+local function find_griffiti_spawn()
+    local m = gMarioStates[0] ---@type MarioState
+    local spawnPos = nil
+    repeat
+        local angleYaw = math.random(0, 0x10000)
+        local ray = collision_find_surface_on_ray(m.spawnInfo.startPos.x, m.spawnInfo.startPos.y, m.spawnInfo.startPos.z, sins(angleYaw)*2000, (math.random()-0.5)*2000, coss(angleYaw)*2000)
+        if ray.surface ~= nil then
+            spawnPos = {
+                x = ray.hitPos.x,
+                y = ray.hitPos.y,
+                z = ray.hitPos.z,
+                normalX = ray.surface.normal.x,
+                normalY = ray.surface.normal.y,
+                normalZ = ray.surface.normal.z,
+            }
+        end
+    until spawnPos ~= nil
+
+    return spawnPos
+end
+
 local function on_sync()
     local m = gMarioStates[0]
     local currLevel = gNetworkPlayers[0].currLevelNum
@@ -345,8 +412,14 @@ local function on_sync()
     --if obj_get_first_with_behavior_id(id_bhvUnlockableChar) then return end
     nuzlocke_seed_rng(currLevel*currArea)
     for i, charNum in pairs(charLevelMap[currLevel][currArea]) do
-        local spawnPos = find_character_spawn()
-        spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, spawnPos.x, spawnPos.y, spawnPos.z, function(o)
+        local charSpawn = find_character_spawn()
+        spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, charSpawn.x, charSpawn.y, charSpawn.z, function(o)
+            o.oCharNum = charNum
+        end)
+        local graffitiSpawn = find_griffiti_spawn()
+        spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
+            o.oFaceAngleYaw = atan2s(graffitiSpawn.normalZ, graffitiSpawn.normalX)
+            o.oFaceAnglePitch = 0x4000*graffitiSpawn.normalY
             o.oCharNum = charNum
         end)
     end
