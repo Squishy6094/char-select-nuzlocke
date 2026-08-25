@@ -289,13 +289,14 @@ function graffiti_geo_func(node, matStackIndex)
     end
     
     if not changed_objects[o] then
-        local cmdt = gfx_get_command(dlHead, 7)
-        local texture = charSelect.character_get_graffiti(0) ---@type TextureInfo
-        gfx_set_command(cmdt, "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b_LOAD_BLOCK, 1, %t)", texture.texture)
+        local cmdt = gfx_get_command(dlHead, 6)
+        local texture = get_texture_info("char_select_graffiti_invert")--charSelect.character_get_graffiti(0) ---@type TextureInfo
+        djui_chat_message_create("i'm RUNNINGG!!")
+        gfx_set_command(cmdt, "gsDPSetTextureImage(%i, %i, 1, %t)", texture.format, texture.size, texture.texture)
         changed_objects[o] = true
     end
 
-    geo.displayList = dlHead
+    geo.displayList = fe_mat
 end
 
 local function obj_unload(o)
@@ -393,9 +394,11 @@ local function find_griffiti_spawn()
                 x = ray.hitPos.x,
                 y = ray.hitPos.y,
                 z = ray.hitPos.z,
-                normalX = ray.surface.normal.x,
-                normalY = ray.surface.normal.y,
-                normalZ = ray.surface.normal.z,
+                normal = {
+                    x = ray.surface.normal.x,
+                    y = ray.surface.normal.y,
+                    z = ray.surface.normal.z,
+                }
             }
         end
     until spawnPos ~= nil
@@ -418,8 +421,9 @@ local function on_sync()
         end)
         local graffitiSpawn = find_griffiti_spawn()
         spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
-            o.oFaceAngleYaw = atan2s(graffitiSpawn.normalZ, graffitiSpawn.normalX)
-            o.oFaceAnglePitch = 0x4000*graffitiSpawn.normalY
+            local vecZero = {x = 0, y = 0, z = 0}
+            o.oFaceAnglePitch = 0x4000-calculate_pitch(vecZero, graffitiSpawn.normal)
+            o.oFaceAngleYaw = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
             o.oCharNum = charNum
         end)
     end
