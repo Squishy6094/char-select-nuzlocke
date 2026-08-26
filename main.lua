@@ -4,6 +4,8 @@
 -- category: cs gamemode
 -- incompatible: gamemode
 
+gLevelValues.pauseExitAnywhere = false
+
 local NUZLOCKE_CHAR_LOCKED = 0
 local NUZLOCKE_CHAR_UNLOCKED = 1
 local NUZLOCKE_CHAR_DIED = 2
@@ -451,60 +453,13 @@ local function find_griffiti_spawn()
         end 
 
         if get_time() - spawnStart > 10 then
-            log_to_console(tostring("Character Select Nuzlocke: Character took 10 Seconds after "..tostring(spawnIteration).." iterations, got stuck on Step "..tostring(spawnStep)..", giving up."), CONSOLE_MESSAGE_ERROR)
+            log_to_console(tostring("Character Select Nuzlocke: Graffiti took 10 Seconds after "..tostring(spawnIteration).." iterations, got stuck on Step "..tostring(spawnStep)..", giving up."), CONSOLE_MESSAGE_ERROR)
             return {x = 0, y = 0, z = 0, yaw = 0}
         end
     end
 
-    log_to_console(tostring("Character Select Nuzlocke: Character Spawned at ("..math.round(spawnPos.x)..", "..math.round(spawnPos.y)..", "..math.round(spawnPos.z)..") in [Level "..gNetworkPlayers[0].currLevelNum.." / Area "..gNetworkPlayers[0].currAreaIndex.."] on iteration "..tostring(spawnIteration)..", Took "..tostring(get_time() - spawnStart).." Seconds."))
+    log_to_console(tostring("Character Select Nuzlocke: Graffiti Spawned at ("..math.round(spawnPos.x)..", "..math.round(spawnPos.y)..", "..math.round(spawnPos.z)..") in [Level "..gNetworkPlayers[0].currLevelNum.." / Area "..gNetworkPlayers[0].currAreaIndex.."] on iteration "..tostring(spawnIteration)..", Took "..tostring(get_time() - spawnStart).." Seconds."))
     return spawnPos
-    --[[
-    local m = gMarioStates[0] ---@type MarioState
-    local spawnPos = nil
-    local spawnIteration = 0
-    local startPos = {
-        x = m.spawnInfo.startPos.x,
-        y = m.spawnInfo.startPos.y,
-        z = m.spawnInfo.startPos.z
-    }
-    repeat
-        spawnIteration = spawnIteration + 1
-        if spawnIteration > 1000 and charObj then
-            startPos.x = charObj.oPosX
-            startPos.y = charObj.oPosY
-            startPos.z = charObj.oPosZ
-            spawnIteration = 0
-        end
-        local rayFloor = collision_find_surface_on_ray(math.random(minX, maxX), 0x4000, math.random(minZ, maxZ), 0, -0x8000, 0, 1)
-        if rayFloor.surface and not evilFloorTypes[rayFloor.surface.type] and rayFloor.surface.normal.y > 0.95 and (rayFloor.hitPos.y > find_water_level(rayFloor.hitPos.x, rayFloor.hitPos.z) or spawnIteration > 1000) then
-            local angleYaw = math.random(0, 0x10000)
-            local floorHeight = find_floor(startPos.x, startPos.y, startPos.z)
-            local ray = collision_find_surface_on_ray(startPos.x, floorHeight + 100, startPos.z, sins(angleYaw)*2000, math.random()*500 - spawnIteration, coss(angleYaw)*2000)
-            if ray.surface ~= nil and not evilFloorTypes[ray.surface.type] then
-                local spawnX = ((ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3 + ray.hitPos.x)*0.5
-                local spawnY = ((ray.surface.vertex1.y + ray.surface.vertex2.y + ray.surface.vertex3.y)/3 + ray.hitPos.y)*0.5
-                local spawnZ = ((ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3 + ray.hitPos.z)*0.5
-                local avoidGraffiti = nearest_object_with_behavior_id_to_pos(spawnX, spawnY, spawnZ, id_bhvCharGraffiti)
-                if not avoidGraffiti or dist_between_object_and_point(avoidGraffiti, spawnX, spawnY, spawnZ) > 200 then
-                    spawnPos = {
-                        x = spawnX,
-                        y = spawnY,
-                        z = spawnZ,
-                        normal = {
-                            x = ray.surface.normal.x,
-                            y = ray.surface.normal.y,
-                            z = ray.surface.normal.z,
-                        }
-                    }
-                end
-            end
-        end
-    until spawnPos ~= nil
-
-    if spawnPos then
-        return spawnPos
-    end
-    ]]
 end
 
 local function on_sync()
@@ -529,7 +484,6 @@ local function on_sync()
                     local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
                     local tilt = 0
                     local pitch = atan2s(math.sqrt(graffitiSpawn.normal.x * graffitiSpawn.normal.x + graffitiSpawn.normal.z * graffitiSpawn.normal.z), graffitiSpawn.normal.y)
-                    djui_chat_message_create(tostring(pitch))
                     o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
                     o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
                     o.oFaceAngleYaw = slopeAngle + tilt
@@ -541,15 +495,6 @@ local function on_sync()
             end
         end
     end
-
-    --[[
-    for i = 0, 10 do
-        local spawnPos = find_character_spawn()
-        spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, spawnPos.x, spawnPos.y, spawnPos.z, function(o)
-            o.oCharNum = 1
-        end)
-    end
-    ]]
 end
 
 local function set_lives_counter()
