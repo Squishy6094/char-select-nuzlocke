@@ -62,9 +62,10 @@ local function nuzlocke_count_character_state(charState)
 end
 
 local function nuzlocke_seed_rng(offset)
-    if not gGlobalSyncTable.nuzlockeSeed then return end
+    if not gGlobalSyncTable.nuzlockeSeed then return false end
     offset = offset or 0
     math.randomseed((gGlobalSyncTable.nuzlockeSeed + offset)%SEED_MAX)
+    return true
 end
 
 -- Map out each level to a character
@@ -77,6 +78,7 @@ local function map_characters()
             charLevelMap[levelNum][areaNum] = {}
         end
     end
+
     nuzlocke_seed_rng()
     
     repeat
@@ -119,7 +121,7 @@ local function initial_setup()
     map_characters()
 end
 
-local function reset_new_game(noSync)
+local function reset_new_game()
 	for i = 0, #charTable do
         nuzlocke_set_character_state(i, i == 0 and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED)
 	end
@@ -168,10 +170,9 @@ local function update()
 		charTable = _G.charSelect.character_get_full_table()
         initial_setup()
         syncedClient = true
-        djui_chat_message_create("synced!!")
     end
 
-    if not isDying then
+    if not isDying and gMarioStates[0].action & ACT_GROUP_CUTSCENE == 0 then
         if queueKill ~= -1 then
             nuzlocke_set_character_state(queueKill, NUZLOCKE_CHAR_DIED)
             queueKill = -1
@@ -256,32 +257,30 @@ local function bhv_unlockable_char_loop(o)
     o.oIntangibleTimer = -1
     local nM = nearest_mario_state_to_object(o) ---@type MarioState
 
-    charSelectObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
     if o.oAction == 0 then
-        o.oAction = o.oAction + 1
-    elseif o.oAction == 1 then
+        charSelectObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
         if nM and obj_check_hitbox_overlap(o, nM.marioObj) then
             nuzlocke_set_character_state(o.oCharNum, NUZLOCKE_CHAR_UNLOCKED)
             o.oAction = o.oAction + 1
             network_send_object(o, true)
         end
-    elseif o.oAction == 2 then
-        charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_YAH_WAH_HOO)
+    elseif o.oAction == 1 then
+        if o.oTimer == 0 then
+            charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_YAH_WAH_HOO)
+            o.oVelY = 30
+        end
         charSelectObjs.character_obj_set_animation(o, MARIO_ANIM_SINGLE_JUMP)
-        o.oVelY = 30
-        o.oAction = o.oAction + 1
-    elseif o.oAction == 3 then
         o.oVelY = o.oVelY - 2
         if o.oVelY < -5 then
             o.oAction = o.oAction + 1
             network_send_object(o, true)
         end
-    elseif o.oAction == 4 then
-        charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_HERE_WE_GO)
+    elseif o.oAction == 2 then
+        if o.oTimer == 0 then
+            charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_HERE_WE_GO)
+        end
         charSelectObjs.character_obj_set_animation(o, MARIO_ANIM_DOUBLE_JUMP_RISE)
         o.oCharHandState = MARIO_HAND_OPEN
-        o.oAction = o.oAction + 1
-    elseif o.oAction == 5 then
         o.oVelY = o.oVelY + 0.5
         o.oMoveAngleYaw = o.oMoveAngleYaw + math.clamp((o.oVelY + 5)*0x100, 0, 0x1800)
         if o.oVelY > 50 then
@@ -308,8 +307,6 @@ local function bhv_char_graffiti_init(o)
 end
 
 local function bhv_char_graffiti_loop(o)
-    --o.oFaceAngleYaw = o.oVelY - (get_global_timer()%90)/90*0x1000
-    --djui_chat_message_create(tostring(math.floor((get_global_timer()%90)/90*0x1000/0x100)))
 end
 
 id_bhvCharGraffiti = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_char_graffiti_init, bhv_char_graffiti_loop)
@@ -380,7 +377,6 @@ local function find_level_bounds()
         end
     end
     levelMinX = dist and math.round(dist) or levelMinX
-    djui_chat_message_create("MinX "..levelMinX)
     
     -- Max X Pos
     local dist = nil
@@ -395,7 +391,6 @@ local function find_level_bounds()
         end
     end
     levelMaxX = dist and math.round(dist) or levelMaxX
-    djui_chat_message_create("MaxX "..levelMaxX)
 
 
     -- Min Z Pos
@@ -411,7 +406,6 @@ local function find_level_bounds()
         end
     end
     levelMinZ = dist and math.round(dist) or levelMinZ
-    djui_chat_message_create("MinZ "..levelMinZ)
     
     -- Max Z Pos
     local dist = nil
@@ -426,7 +420,10 @@ local function find_level_bounds()
         end
     end
     levelMaxZ = dist and math.round(dist) or levelMaxZ
-    djui_chat_message_create("MaxZ "..levelMaxZ)
+    --djui_chat_message_create("MinX "..levelMinX)
+    --djui_chat_message_create("MaxX "..levelMaxX)
+    --djui_chat_message_create("MinZ "..levelMinZ)
+    --djui_chat_message_create("MaxZ "..levelMaxZ)
 end
 
 local function find_character_spawn()
@@ -576,29 +573,30 @@ local function on_sync()
     if obj_get_first_with_behavior_id(id_bhvUnlockableChar) then return end
     if obj_get_first_with_behavior_id(id_bhvCharGraffiti) then return end
     find_level_bounds()
-    nuzlocke_seed_rng(currLevel*currArea)
-    for i, charNum in pairs(charLevelMap[currLevel][currArea]) do
-        local charSpawn = find_character_spawn()
-        spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, charSpawn.x, charSpawn.y, charSpawn.z, function(o)
-            o.oCharNum = charNum
-        end)
-    end
-    for i, areaData in pairs(charLevelMap[currLevel]) do
-        for i, charNum in pairs(areaData) do
-            for i = 1, math.random(1, 3) do
-                local graffitiSpawn = find_griffiti_spawn()
-                spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
-                    local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
-                    local tilt = 0
-                    local pitch = atan2s(math.sqrt(graffitiSpawn.normal.x * graffitiSpawn.normal.x + graffitiSpawn.normal.z * graffitiSpawn.normal.z), graffitiSpawn.normal.y)
-                    o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
-                    o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
-                    o.oFaceAngleYaw = slopeAngle + tilt
-                    
-                    --o.oFaceAngleRoll = math.random(-0x1000, 0x1000)
-                    obj_scale(o, 1 + math.random())
-                    o.oCharNum = charNum
-                end)
+    if nuzlocke_seed_rng(currLevel*currArea) then
+        for i, charNum in pairs(charLevelMap[currLevel][currArea]) do
+            local charSpawn = find_character_spawn()
+            spawn_sync_object(id_bhvUnlockableChar, E_MODEL_NONE, charSpawn.x, charSpawn.y, charSpawn.z, function(o)
+                o.oCharNum = charNum
+            end)
+        end
+        for i, areaData in pairs(charLevelMap[currLevel]) do
+            for i, charNum in pairs(areaData) do
+                for i = 1, math.random(1, 3) do
+                    local graffitiSpawn = find_griffiti_spawn()
+                    spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
+                        local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
+                        local tilt = 0
+                        local pitch = atan2s(math.sqrt(graffitiSpawn.normal.x * graffitiSpawn.normal.x + graffitiSpawn.normal.z * graffitiSpawn.normal.z), graffitiSpawn.normal.y)
+                        o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
+                        o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
+                        o.oFaceAngleYaw = slopeAngle + tilt
+                        
+                        --o.oFaceAngleRoll = math.random(-0x1000, 0x1000)
+                        obj_scale(o, 1 + math.random())
+                        o.oCharNum = charNum
+                    end)
+                end
             end
         end
     end
