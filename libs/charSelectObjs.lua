@@ -127,6 +127,7 @@ end
 
 local function character_obj_loop(o)
     o.oIsChar = 1
+    o.globalPlayerIndex = network_global_index_from_local(0)
     if charSelectExists then
         obj_set_model_extended(o, characterTable[o.oCharNum][o.oCharAlt].model)
     end

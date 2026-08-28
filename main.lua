@@ -1,7 +1,6 @@
 -- name: Character Select Nuzlocke
 -- description: character select nuzlocke
--- pausable: true
--- category: cs gamemode
+-- category: character gamemode
 -- incompatible: gamemode
 
 gLevelValues.pauseExitAnywhere = false
@@ -63,6 +62,7 @@ local function nuzlocke_count_character_state(charState)
 end
 
 local function nuzlocke_seed_rng(offset)
+    if not gGlobalSyncTable.nuzlockeSeed then return end
     offset = offset or 0
     math.randomseed((gGlobalSyncTable.nuzlockeSeed + offset)%SEED_MAX)
 end
@@ -106,7 +106,11 @@ local prevUnlockState = {}
 local function initial_setup()
 	local starter = 0
 	for i = 0, #charTable do
-        nuzlocke_set_character_state(i, mod_storage_load_integer(save_file_prefix("charState"..charTable[i].saveName), i == starter and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED))
+        if network_is_server() then
+            nuzlocke_set_character_state(i, mod_storage_load_integer(save_file_prefix("charState"..charTable[i].saveName), i == starter and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED))
+        else
+            log_to_console("Synced char state "..charTable[i].saveName.." = "..nuzlocke_get_character_state(i))
+        end
         charSelect.character_set_locked(i, function()
             return nuzlocke_get_character_state(i) == NUZLOCKE_CHAR_UNLOCKED
         end, i ~= 0)
@@ -115,7 +119,7 @@ local function initial_setup()
     map_characters()
 end
 
-local function reset_new_game()
+local function reset_new_game(noSync)
 	for i = 0, #charTable do
         nuzlocke_set_character_state(i, i == 0 and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED)
 	end
@@ -130,7 +134,8 @@ local function queue_char_kill()
     isDying = true
 end
 
-local function reset_save(seed)
+PACKET_TYPE_RESET = 1
+local function reset_save(seed, noSync)
     save_file_erase_current_backup_save()
     warp_to_start_level()
     gMarioStates[0].health = 0x880
@@ -141,14 +146,30 @@ local function reset_save(seed)
     end
     update_save(true, seed)
     reset_new_game()
+    if not noSync then
+        network_send(true, {
+            type = PACKET_TYPE_RESET,
+            index = network_global_index_from_local(0),
+            seed = seed
+        })
+    end
 end
 
+local function on_packet_recieve(data)
+    if data.type == PACKET_TYPE_RESET then
+        reset_save(data.seed, true)
+    end
+end
+
+local syncedClient = false
 local function update()
-    if startup_init_stall(1) then
+    if not startup_init_stall() then return end
+    if (network_is_server() or gGlobalSyncTable.nuzlockeSeed ~= nil) and not syncedClient then
 		charTable = _G.charSelect.character_get_full_table()
         initial_setup()
+        syncedClient = true
+        djui_chat_message_create("synced!!")
     end
-    if not startup_init_stall() then return end
 
     if not isDying then
         if queueKill ~= -1 then
@@ -219,6 +240,14 @@ local function bhv_unlockable_char_init(o)
         b = charTable[o.oCharNum][1].color.b * 0.5 + 127,
     }
     oTagLib.obj_set_nametag(o, charTable[o.oCharNum].nickname, tagColor)
+    network_init_object(o, false, {
+        "oCharNum",
+        "oCharAlt",
+        "oCharPalette",
+        "oAction",
+        "oPosY",
+        "oVelY",
+    })
 end
 
 ---@param o Object
@@ -227,13 +256,14 @@ local function bhv_unlockable_char_loop(o)
     o.oIntangibleTimer = -1
     local nM = nearest_mario_state_to_object(o) ---@type MarioState
 
+    charSelectObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
     if o.oAction == 0 then
-        charSelectObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
         o.oAction = o.oAction + 1
     elseif o.oAction == 1 then
         if nM and obj_check_hitbox_overlap(o, nM.marioObj) then
             nuzlocke_set_character_state(o.oCharNum, NUZLOCKE_CHAR_UNLOCKED)
             o.oAction = o.oAction + 1
+            network_send_object(o, true)
         end
     elseif o.oAction == 2 then
         charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_YAH_WAH_HOO)
@@ -244,6 +274,7 @@ local function bhv_unlockable_char_loop(o)
         o.oVelY = o.oVelY - 2
         if o.oVelY < -5 then
             o.oAction = o.oAction + 1
+            network_send_object(o, true)
         end
     elseif o.oAction == 4 then
         charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_HERE_WE_GO)
@@ -255,6 +286,7 @@ local function bhv_unlockable_char_loop(o)
         o.oMoveAngleYaw = o.oMoveAngleYaw + math.clamp((o.oVelY + 5)*0x100, 0, 0x1800)
         if o.oVelY > 50 then
             obj_mark_for_deletion(o)
+            network_send_object(o, true)
         end
     end
     o.oPosY = o.oPosY + o.oVelY
@@ -270,6 +302,9 @@ local function bhv_char_graffiti_init(o)
         obj_mark_for_deletion(o)
         return
     end
+    network_init_object(o, false, {
+        "oCharNum",
+    })
 end
 
 local function bhv_char_graffiti_loop(o)
@@ -322,23 +357,91 @@ end
 
 hook_event(HOOK_ON_OBJECT_UNLOAD, obj_unload)
 
+local levelMinX = -0x4000
+local levelMaxX = 0x4000
+local levelMinZ = -0x4000
+local levelMaxZ = 0x4000
+local function find_level_bounds()
+    levelMinX = -0x4000
+    levelMaxX = 0x4000
+    levelMinZ = -0x4000
+    levelMaxZ = 0x4000
+
+    -- Min X Pos
+    local dist = nil
+    for distMult = 16, 0, -1 do
+        if not dist then
+            for i = -5, 5 do
+                local ray = collision_find_surface_on_ray(levelMinX*(distMult/16), 0x4000, 0x4000*(i/5), 0, -0x8000, 0, 1)
+                if ray.surface ~= nil then
+                    dist = ray.hitPos.x
+                end
+            end
+        end
+    end
+    levelMinX = dist and math.round(dist) or levelMinX
+    djui_chat_message_create("MinX "..levelMinX)
+    
+    -- Max X Pos
+    local dist = nil
+    for distMult = 16, 0, -1 do
+        if not dist then
+            for i = -5, 5 do
+                local ray = collision_find_surface_on_ray(levelMaxX*(distMult/16), 0x4000, 0x4000*(i/5), 0, -0x8000, 0, 1)
+                if ray.surface ~= nil then
+                    dist = ray.hitPos.x
+                end
+            end
+        end
+    end
+    levelMaxX = dist and math.round(dist) or levelMaxX
+    djui_chat_message_create("MaxX "..levelMaxX)
+
+
+    -- Min Z Pos
+    local dist = nil
+    for distMult = 16, 0, -1 do
+        if not dist then
+            for i = -5, 5 do
+                local ray = collision_find_surface_on_ray(0x4000*(i/5), 0x4000, levelMinZ*(distMult/16), 0, -0x8000, 0, 1)
+                if ray.surface ~= nil then
+                    dist = ray.hitPos.z
+                end
+            end
+        end
+    end
+    levelMinZ = dist and math.round(dist) or levelMinZ
+    djui_chat_message_create("MinZ "..levelMinZ)
+    
+    -- Max Z Pos
+    local dist = nil
+    for distMult = 16, 0, -1 do
+        if not dist then
+            for i = -5, 5 do
+                local ray = collision_find_surface_on_ray(0x4000*(i/5), 0x4000, levelMaxZ*(distMult/16), 0, -0x8000, 0, 1)
+                if ray.surface ~= nil then
+                    dist = ray.hitPos.z
+                end
+            end
+        end
+    end
+    levelMaxZ = dist and math.round(dist) or levelMaxZ
+    djui_chat_message_create("MaxZ "..levelMaxZ)
+end
+
 local function find_character_spawn()
     local spawnPos = nil
-    local minX = -0x8000
-    local maxX = 0x8000
-    local minZ = -0x8000
-    local maxZ = 0x8000
     local spawnStart = get_time()
     local spawnIteration = 0
     while spawnPos == nil do
         local spawnStep = 0
         spawnIteration = spawnIteration + 1
-        local rayFloor = collision_find_surface_on_ray(math.random(minX, maxX), 0x4000, math.random(minZ, maxZ), 0, -0x8000, 0, 1)
-        if rayFloor.surface and not evilFloorTypes[rayFloor.surface.type] and rayFloor.surface.normal.y > 0.95 and (rayFloor.hitPos.y > find_water_level(rayFloor.hitPos.x, rayFloor.hitPos.z) or spawnIteration > 1000) then
+        local ray = collision_find_surface_on_ray(math.random(levelMinX, levelMaxX), 0x4000, math.random(levelMinZ, levelMaxZ), 0, -0x8000, 0, 1)
+        if ray.surface and not evilFloorTypes[ray.surface.type] and ray.surface.normal.y > 0.95 and (ray.hitPos.y > find_water_level(ray.hitPos.x, ray.hitPos.z) or spawnIteration > 1000) then
             spawnStep = spawnStep + 1
-            local surfaceX = (rayFloor.surface.vertex1.x + rayFloor.surface.vertex2.x + rayFloor.surface.vertex3.x)/3
-            local surfaceY = (rayFloor.surface.vertex1.y + rayFloor.surface.vertex2.y + rayFloor.surface.vertex3.y)/3
-            local surfaceZ = (rayFloor.surface.vertex1.z + rayFloor.surface.vertex2.z + rayFloor.surface.vertex3.z)/3
+            local surfaceX = (ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3
+            local surfaceY = (ray.surface.vertex1.y + ray.surface.vertex2.y + ray.surface.vertex3.y)/3
+            local surfaceZ = (ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3
 
             local avoidChar = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvUnlockableChar)
             local avoidDoorWarp = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvDoorWarp)
@@ -347,8 +450,8 @@ local function find_character_spawn()
             for i = 0, 2 do
                 local currNum = (i%3) + 1
                 local nextNum = ((i+1)%3) + 1
-                local currPos = rayFloor.surface["vertex"..tostring(currNum)]
-                local nextPos = rayFloor.surface["vertex"..tostring(nextNum)]
+                local currPos = ray.surface["vertex"..tostring(currNum)]
+                local nextPos = ray.surface["vertex"..tostring(nextNum)]
                 local edgeDist = math.sqrt((currPos.x - nextPos.x)^2 + (currPos.z - nextPos.z)^2)
                 if not smallestEdge or smallestEdge > edgeDist then
                     smallestEdge = edgeDist
@@ -358,7 +461,7 @@ local function find_character_spawn()
             local avoidDist = math.min(avoidChar and dist_between_object_and_point(avoidChar, surfaceX, surfaceY, surfaceZ) or 0x8000,
                 avoidDoorWarp and dist_between_object_and_point(avoidDoorWarp, surfaceX, surfaceY, surfaceZ) or 0x8000)
 
-            if (avoidDist > 500 or spawnIteration > 5000) and (smallestEdge < (100 + spawnIteration)) then --- math.floor(spawnIteration/100)*100 then
+            if (avoidDist > 100 or spawnIteration > 5000) and (smallestEdge > 100 and smallestEdge < (500 + spawnIteration)) then --- math.floor(spawnIteration/100)*100 then
                 local outofBounds = false
                 for i = 0, 7 do
                     if not outofBounds then
@@ -409,7 +512,7 @@ local function find_griffiti_spawn()
     while spawnPos == nil do
         local spawnStep = 0
         spawnIteration = spawnIteration + 1
-        local ray = collision_find_surface_on_ray(math.random(minX, maxX), 0x4000, math.random(minZ, maxZ), 0, -0x8000, 0, 1)
+        local ray = collision_find_surface_on_ray(math.random(levelMinX, levelMaxX), 0x4000, math.random(levelMinZ, levelMaxZ), 0, -0x8000, 0, 1)
         if ray.surface and not evilFloorTypes[ray.surface.type] and ray.surface.normal.y > 0.95 and (ray.hitPos.y > find_water_level(ray.hitPos.x, ray.hitPos.z) or spawnIteration > 1000) then
             spawnStep = spawnStep + 1
             local surfaceX = (ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3
@@ -417,8 +520,8 @@ local function find_griffiti_spawn()
             local surfaceZ = (ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3
 
             local angleYaw = math.random(0, 0x10000)
-            if math.random() > 0.05 then
-                ray = collision_find_surface_on_ray(surfaceX, surfaceY + 100, surfaceZ, sins(angleYaw)*2000, math.random()*1000, coss(angleYaw)*2000)
+            if math.random() > 0.01 then
+                ray = collision_find_surface_on_ray(surfaceX, surfaceY + 100, surfaceZ, sins(angleYaw)*5000, math.random()*1000, coss(angleYaw)*5000)
             end
             if ray.surface ~= nil and not evilFloorTypes[ray.surface.type] then
                 local smallestEdge = nil
@@ -433,11 +536,11 @@ local function find_griffiti_spawn()
                     end
                 end
 
-                local spawnX = (ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3
-                local spawnY = (ray.surface.vertex1.y + ray.surface.vertex2.y + ray.surface.vertex3.y)/3
-                local spawnZ = (ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3
+                local spawnX = math.lerp((ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3, ray.hitPos.x, 0.5)
+                local spawnY = math.lerp((ray.surface.vertex1.y + ray.surface.vertex2.y + ray.surface.vertex3.y)/3, ray.hitPos.y, 0.5)
+                local spawnZ = math.lerp((ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3, ray.hitPos.z, 0.5)
                 local avoidGraffiti = nearest_object_with_behavior_id_to_pos(spawnX, spawnY, spawnZ, id_bhvCharGraffiti)
-                if smallestEdge > 300 and (not avoidGraffiti or dist_between_object_and_point(avoidGraffiti, spawnX, spawnY, spawnZ) > 200) then
+                if smallestEdge > 300 and ((not avoidGraffiti or dist_between_object_and_point(avoidGraffiti, spawnX, spawnY, spawnZ) > 100) or spawnIteration > 1000) then
                     spawnPos = {
                         x = spawnX,
                         y = spawnY,
@@ -467,8 +570,12 @@ local function on_sync()
     local currLevel = gNetworkPlayers[0].currLevelNum
     local currArea = gNetworkPlayers[0].currAreaIndex
     if not charLevelMap[currLevel] or not charLevelMap[currLevel][currArea] then return end
+    -- Don't run in act select
     if obj_get_first_with_behavior_id(id_bhvActSelector) then return end
-    --if obj_get_first_with_behavior_id(id_bhvUnlockableChar) then return end
+    -- Don't run if someone else ran it already
+    if obj_get_first_with_behavior_id(id_bhvUnlockableChar) then return end
+    if obj_get_first_with_behavior_id(id_bhvCharGraffiti) then return end
+    find_level_bounds()
     nuzlocke_seed_rng(currLevel*currArea)
     for i, charNum in pairs(charLevelMap[currLevel][currArea]) do
         local charSpawn = find_character_spawn()
@@ -507,6 +614,7 @@ hook_event(HOOK_UPDATE, update)
 hook_event(HOOK_ON_DEATH, queue_char_kill)
 hook_event(HOOK_ON_SYNC_VALID, on_sync)
 hook_event(HOOK_MARIO_UPDATE, set_lives_counter)
+hook_event(HOOK_ON_PACKET_RECEIVE, on_packet_recieve)
 _G.charSelect.hook_allow_menu_open(block_menu_in_stages)
 
 local function set_seed(msg)
