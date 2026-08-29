@@ -13,12 +13,12 @@ local NUZLOCKE_CHAR_DIED = 2
 
 local SEED_MAX = 10000
 
+local saveFile = get_current_save_file_num() - 1
 local function save_file_prefix(str)
-    return "saveFile"..tostring(get_current_save_file_num())..(save_file_get_using_backup_slot() and "B" or "")..str
+    return "saveFile"..tostring(saveFile)..(save_file_get_using_backup_slot() and "B" or "")..str
 end
 
 local function update_save(reset, seed)
-    save_file_set_using_backup_slot(true)
     if not network_is_server() then return end
     if save_file_get_flags() < mod_storage_load_number(save_file_prefix("progress"), 0) or reset then
         -- Assume if progress is lost, that the save had been deleted
@@ -141,7 +141,9 @@ end
 
 PACKET_TYPE_RESET = 1
 local function reset_save(seed, noSync)
-    save_file_erase_current_backup_save()
+    save_file_erase(saveFile)
+    save_file_do_save(saveFile, 1)
+    save_file_reload(0)
     warp_to_start_level()
     gMarioStates[0].health = 0x880
     local oChar = obj_get_first_with_behavior_id(id_bhvUnlockableChar)
