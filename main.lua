@@ -6,6 +6,9 @@
 gServerSettings.playerKnockbackStrength = 25
 gServerSettings.bubbleDeath = false
 gLevelValues.pauseExitAnywhere = false
+if gServerSettings.playerInteractions == PLAYER_INTERACTIONS_PVP then
+    gServerSettings.playerInteractions = PLAYER_INTERACTIONS_SOLID
+end
 
 local NUZLOCKE_CHAR_LOCKED = 0
 local NUZLOCKE_CHAR_UNLOCKED = 1
