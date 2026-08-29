@@ -3,6 +3,8 @@
 -- category: character gamemode
 -- incompatible: gamemode
 
+gServerSettings.playerKnockbackStrength = 25
+gServerSettings.bubbleDeath = false
 gLevelValues.pauseExitAnywhere = false
 
 local NUZLOCKE_CHAR_LOCKED = 0
@@ -64,7 +66,7 @@ end
 local function nuzlocke_seed_rng(offset)
     if not gGlobalSyncTable.nuzlockeSeed then return false end
     offset = offset or 0
-    math.randomseed((gGlobalSyncTable.nuzlockeSeed + offset)%SEED_MAX)
+    mul_random_seed((gGlobalSyncTable.nuzlockeSeed + offset)%SEED_MAX)
     return true
 end
 
@@ -87,13 +89,14 @@ local function map_characters()
             -- Get Random Area
             local areaNum = 0
             repeat 
-                areaNum = math.random(1, 7)
+                areaNum = mul_random(1, 7)
             until levelTable[areaNum]
 
             -- Get Random Character (without repeats)
             local charNum = 0
             repeat 
-                charNum = math.random(1, #charTable)
+                charNum = mul_random(1, #charTable)
+                print(charNum)
             until not mappedChars[charNum]
             
             table.insert(levelTable[areaNum], charNum)
@@ -433,7 +436,7 @@ local function find_character_spawn()
     while spawnPos == nil do
         local spawnStep = 0
         spawnIteration = spawnIteration + 1
-        local ray = collision_find_surface_on_ray(math.random(levelMinX, levelMaxX), 0x4000, math.random(levelMinZ, levelMaxZ), 0, -0x8000, 0, 1)
+        local ray = collision_find_surface_on_ray(mul_random(levelMinX, levelMaxX), 0x4000, mul_random(levelMinZ, levelMaxZ), 0, -0x8000, 0, 1)
         if ray.surface and not evilFloorTypes[ray.surface.type] and ray.surface.normal.y > 0.95 and (ray.hitPos.y > find_water_level(ray.hitPos.x, ray.hitPos.z) or spawnIteration > 1000) then
             spawnStep = spawnStep + 1
             local surfaceX = (ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3
@@ -509,16 +512,16 @@ local function find_griffiti_spawn()
     while spawnPos == nil do
         local spawnStep = 0
         spawnIteration = spawnIteration + 1
-        local ray = collision_find_surface_on_ray(math.random(levelMinX, levelMaxX), 0x4000, math.random(levelMinZ, levelMaxZ), 0, -0x8000, 0, 1)
+        local ray = collision_find_surface_on_ray(mul_random(levelMinX, levelMaxX), 0x4000, mul_random(levelMinZ, levelMaxZ), 0, -0x8000, 0, 1)
         if ray.surface and not evilFloorTypes[ray.surface.type] and ray.surface.normal.y > 0.95 and (ray.hitPos.y > find_water_level(ray.hitPos.x, ray.hitPos.z) or spawnIteration > 1000) then
             spawnStep = spawnStep + 1
             local surfaceX = (ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3
             local surfaceY = (ray.surface.vertex1.y + ray.surface.vertex2.y + ray.surface.vertex3.y)/3
             local surfaceZ = (ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3
 
-            local angleYaw = math.random(0, 0x10000)
-            if math.random() > 0.01 then
-                ray = collision_find_surface_on_ray(surfaceX, surfaceY + 100, surfaceZ, sins(angleYaw)*5000, math.random()*1000, coss(angleYaw)*5000)
+            local angleYaw = mul_random(0, 0x10000)
+            if mul_random() > 0.01 then
+                ray = collision_find_surface_on_ray(surfaceX, surfaceY + 100, surfaceZ, sins(angleYaw)*5000, mul_random()*1000, coss(angleYaw)*5000)
             end
             if ray.surface ~= nil and not evilFloorTypes[ray.surface.type] then
                 local smallestEdge = nil
@@ -582,7 +585,7 @@ local function on_sync()
         end
         for i, areaData in pairs(charLevelMap[currLevel]) do
             for i, charNum in pairs(areaData) do
-                for i = 1, math.random(1, 3) do
+                for i = 1, mul_random(1, 3) do
                     local graffitiSpawn = find_griffiti_spawn()
                     spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
                         local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
@@ -592,8 +595,8 @@ local function on_sync()
                         o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
                         o.oFaceAngleYaw = slopeAngle + tilt
                         
-                        --o.oFaceAngleRoll = math.random(-0x1000, 0x1000)
-                        obj_scale(o, 1 + math.random())
+                        --o.oFaceAngleRoll = mul_random(-0x1000, 0x1000)
+                        obj_scale(o, 1 + mul_random())
                         o.oCharNum = charNum
                     end)
                 end
@@ -617,7 +620,7 @@ _G.charSelect.hook_allow_menu_open(block_menu_in_stages)
 
 local function set_seed(msg)
     if not network_is_server() then return end
-    local seed = tonumber(msg) or math.random(0, SEED_MAX - 1)
+    local seed = tonumber(msg) or mul_random(0, SEED_MAX - 1)
     seed = math.round(seed)%SEED_MAX
     local prevSeed = gGlobalSyncTable.nuzlockeSeed
     reset_save(seed)

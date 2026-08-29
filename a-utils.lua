@@ -223,3 +223,40 @@ function nearest_object_with_behavior_id_to_pos(x, y, z, bhvId)
 
     return nearest, nearestDist
 end
+
+-- Custom mulberry32 based rng funcs for cross-device-compatibility
+
+function imul(a, b)
+    return math.u32(a * b)
+end
+
+function mulberry32(a)
+    a = math.u32(a + 0x6D2B79F5)
+    local t = a;
+    t = imul(t ~ (t >> 15), t | 1);
+    t = math.u32(t ~ (t + imul(t ~ (t >> 7), t | 61)))
+    return math.u32(t ~ (t >> 14)) / 4294967296;
+end
+
+local mulberrySeed = 1
+function mul_random_seed(seed)
+    mulberrySeed = seed
+end
+
+function mul_random(a, b)
+    local num = mulberry32(mulberrySeed)
+    mulberrySeed = math.round(num*4294967296)
+    if a then
+        if b then
+            return math.round(num*(b - a)) + a
+        else
+            return math.round(num*(a-1)) + 1
+        end
+    else
+        return num
+    end
+end
+
+for i = 0, 100 do
+    print("DebugTest " .. i .. " - " ..mul_random())
+end
