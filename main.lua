@@ -109,16 +109,15 @@ end
 
 local prevUnlockState = {}
 local function initial_setup()
-	local starter = 0
 	for i = 0, #charTable do
         if network_is_server() then
-            nuzlocke_set_character_state(i, mod_storage_load_integer(save_file_prefix("charState"..charTable[i].saveName), i == starter and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED))
+            nuzlocke_set_character_state(i, mod_storage_load_integer(save_file_prefix("charState"..charTable[i].saveName), i == 0 and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED))
         else
             log_to_console("Synced char state "..charTable[i].saveName.." = "..nuzlocke_get_character_state(i))
         end
         charSelect.character_set_locked(i, function()
             return nuzlocke_get_character_state(i) == NUZLOCKE_CHAR_UNLOCKED
-        end, i ~= 0)
+        end, true)
 	end
 
     map_characters()
