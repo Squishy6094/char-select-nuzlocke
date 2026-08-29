@@ -120,7 +120,7 @@ local function initial_setup()
         end
         charSelect.character_set_locked(i, function()
             return nuzlocke_get_character_state(i) == NUZLOCKE_CHAR_UNLOCKED
-        end, true)
+        end, false)
 	end
 
     map_characters()
@@ -182,6 +182,8 @@ local function update()
     if not isDying and gMarioStates[0].action & ACT_GROUP_CUTSCENE == 0 then
         if queueKill ~= -1 then
             nuzlocke_set_character_state(queueKill, NUZLOCKE_CHAR_DIED)
+            local charData = charTable[queueKill][1]
+            djui_popup_create_global("Character Select Nuzlocke:\n"..color_to_string(charData.color.r*0.5 + 127, charData.color.g*0.5 + 127, charData.color.b*0.5 + 127)..charData.name.."\\#dcdcdc\\ was lost by "..network_get_player_text_color_string(0)..gNetworkPlayers[0].name, 2)
             queueKill = -1
         end
     else
@@ -268,6 +270,10 @@ local function bhv_unlockable_char_loop(o)
         charSelectObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
         if nM and obj_check_hitbox_overlap(o, nM.marioObj) then
             nuzlocke_set_character_state(o.oCharNum, NUZLOCKE_CHAR_UNLOCKED)
+            if sync_object_is_owned_locally(o.oSyncID) then
+                local charData = charTable[o.oCharNum][1]
+                djui_popup_create_global("Character Select Nuzlocke:\n"..color_to_string(charData.color.r*0.5 + 127, charData.color.g*0.5 + 127, charData.color.b*0.5 + 127)..charData.name.."\\#dcdcdc\\ was found by "..network_get_player_text_color_string(nM.playerIndex)..gNetworkPlayers[nM.playerIndex].name, 2)
+            end
             o.oAction = o.oAction + 1
             network_send_object(o, true)
         end
