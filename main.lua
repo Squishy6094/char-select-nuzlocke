@@ -3,7 +3,7 @@
 -- category: character gamemode
 -- incompatible: gamemode
 
-gServerSettings.playerKnockbackStrength = 25
+gServerSettings.playerKnockbackStrength = 10
 gServerSettings.bubbleDeath = false
 gLevelValues.pauseExitAnywhere = false
 if gServerSettings.playerInteractions == PLAYER_INTERACTIONS_PVP then
