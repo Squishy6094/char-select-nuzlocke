@@ -7,6 +7,33 @@ local menuCurrOption = 1
 local MENU_STATE_MAIN = 1
 local MENU_STATE_NEW_RUN = 2
 
+currRomhack = "Super Mario 64"
+
+for i in pairs(gActiveMods) do
+    local mod = gActiveMods[i]
+    if mod.incompatible ~= nil then
+        if mod.incompatible:find("romhack") then
+            currRomhack = mod.name
+            break
+        end
+    end
+    if mod.category ~= nil then
+        if mod.category:find("romhack") then
+            currRomhack = mod.name
+            break
+        end
+    end
+end
+
+local fileRomhack = mod_storage_load(save_file_prefix("romhack"), currRomhack)
+log_to_console(currRomhack)
+log_to_console(fileRomhack)
+
+continueError = ""
+if fileRomhack ~= currRomhack then
+    continueError = continueError.."\nRomhack Mismatch: Expected "..fileRomhack
+end
+
 -- Settings
 gGlobalSyncTable.nuzMixupMode = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
 gGlobalSyncTable.nuzOptionsDone = 0
@@ -19,10 +46,14 @@ end
 local menuOptions = {
     [MENU_STATE_MAIN] = {
         function (toggleChange)
-            if toggleChange ~= 0 then
-                gGlobalSyncTable.nuzOptionsDone = 1
+            if continueError ~= "" then
+                return "\\#888888\\Continue", "Cannot Continue Run!"..continueError
+            else
+                if toggleChange ~= 0 then
+                    gGlobalSyncTable.nuzOptionsDone = 1
+                end
+                return "Continue", "Continue your existing run"
             end
-            return "Continue", "Description"
         end,
         function (toggleChange)
             if toggleChange ~= 0 then
@@ -135,8 +166,10 @@ local function hud_render()
             else
                 djui_hud_set_color(255, 255, 255, 255)
             end
+            local descW, descH = djui_hud_measure_text(desc)
             djui_hud_print_text(name, sW-150, y + (i-1)*27, 0.5, 0.5)
             djui_hud_print_text(desc, sW-148, y + 16 + (i-1)*27, 0.2, 0.2)
+            y = y + math.max(descH*0.2 - 10, 0)
         end
     end
 end

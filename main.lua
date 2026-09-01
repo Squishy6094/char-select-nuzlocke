@@ -3,6 +3,8 @@
 -- category: character gamemode
 -- incompatible: gamemode
 
+charTable = {}
+
 gServerSettings.playerKnockbackStrength = 10
 gServerSettings.bubbleDeath = false
 gLevelValues.pauseExitAnywhere = false
@@ -16,8 +18,37 @@ local NUZLOCKE_CHAR_DIED = 2
 
 local SEED_MAX = 10000
 
+local characterMods = {}
+local function check_character_packs()
+    if not charTable then return end 
+
+    for i = 0, #charTable do
+        characterMods[charTable[i].modData.name] = 0
+    end
+
+    for key, value in pairs(mod_storage_load_all()) do
+        if string.find(key, save_file_prefix("enabledPack")) then
+            if characterMods[value] == 0 then
+                characterMods[value] = 1
+            else
+                characterMods[value] = 2
+            end
+        end
+    end
+
+    for name, status in pairs(characterMods) do
+        if status == 0 then
+            continueError = continueError .. "\n\\#fff\\Extra Pack: " .. string.gsub(name, "_", " ")
+        end
+        if status == 2 then
+            continueError = continueError .. "\n\\#fff\\Missing Pack: " .. string.gsub(name, "_", " ")
+        end
+    end
+end
+
 local function update_save(reset, seed)
     if not network_is_server() then return end
+
     if save_file_get_flags() < mod_storage_load_number(save_file_prefix("progress"), 0) or reset then
         -- Assume if progress is lost, that the save had been deleted
         log_to_console("Character Select Nuzlocke: Save Data Lost, Deleting Custom Save Flags!", CONSOLE_MESSAGE_WARNING)
@@ -26,16 +57,16 @@ local function update_save(reset, seed)
         for _, charName in pairs(charFieldList) do
             mod_storage_remove(save_file_prefix("charState"..charName))
         end
+        mod_storage_save_integer(save_file_prefix("progress"), 0)
+    else
+        mod_storage_save_integer(save_file_prefix("progress"), save_file_get_flags())
     end
-    mod_storage_save_integer(save_file_prefix("progress"), save_file_get_flags())
 
     gGlobalSyncTable.nuzlockeSeed = seed or mod_storage_load_integer(save_file_prefix("seed"), get_time()%SEED_MAX)
     mod_storage_save_integer(save_file_prefix("seed"), gGlobalSyncTable.nuzlockeSeed)
     log_to_console("Character Select Nuzlocke: Set Seed to '" .. gGlobalSyncTable.nuzlockeSeed .. "'")
 end
 update_save()
-
-local charTable = {}
 
 local function block_menu_in_stages()
     return gNetworkPlayers[0].currCourseNum == 0
@@ -130,7 +161,7 @@ local function reset_characters()
 end
 
 local function randomize_character()
-    if gGlobalSyncTable.nuzMixupMode ~= 0 then
+    if #charTable > 0 and gGlobalSyncTable.nuzMixupMode ~= 0 then
         local charNum = CT_MARIO
         if nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) > 0 then
             repeat
@@ -164,6 +195,19 @@ function reset_save(seed, noSync)
     end
     update_save(true, seed)
     reset_characters()
+
+    local packCount = 0
+    for name, status in pairs(characterMods) do
+        if status ~= 2 then
+            mod_storage_save(save_file_prefix("enabledPack"..packCount), name)
+            packCount = packCount + 1
+        end
+    end
+    mod_storage_save(save_file_prefix("romhack"), currRomhack)
+
+    gGlobalSyncTable.nuzOptionsDone = 1
+
+
     if not noSync then
         network_send(true, {
             type = PACKET_TYPE_RESET,
@@ -171,7 +215,6 @@ function reset_save(seed, noSync)
             seed = seed
         })
     end
-    gGlobalSyncTable.nuzOptionsDone = 1
 end
 
 local function on_packet_recieve(data)
@@ -185,7 +228,11 @@ local function update()
     if not startup_init_stall() then return end
     if (network_is_server() or gGlobalSyncTable.nuzlockeSeed ~= nil) and not syncedClient then
 		charTable = _G.charSelect.character_get_full_table()
+        check_character_packs()
         initial_setup()
+        if mod_storage_load_integer(save_file_prefix("progress"), 0) == 0 then
+            continueError = "\nNo Save Data"
+        end
         syncedClient = true
     end
 
@@ -444,10 +491,6 @@ local function find_level_bounds()
         end
     end
     levelMaxZ = dist and math.round(dist) or levelMaxZ
-    --djui_chat_message_create("MinX "..levelMinX)
-    --djui_chat_message_create("MaxX "..levelMaxX)
-    --djui_chat_message_create("MinZ "..levelMinZ)
-    --djui_chat_message_create("MaxZ "..levelMaxZ)
 end
 
 local function find_character_spawn()
@@ -657,4 +700,4 @@ local function set_seed(msg)
     return true
 end
 
-hook_chat_command("nuzlocke-seed", "Set the Character Select Nuzlocke Seed [0 - "..(SEED_MAX - 1).."]", set_seed)
+--hook_chat_command("nuzlocke-seed", "Set the Character Select Nuzlocke Seed [0 - "..(SEED_MAX - 1).."]", set_seed)
