@@ -129,6 +129,20 @@ local function reset_characters()
     map_characters()
 end
 
+local function randomize_character()
+    if gGlobalSyncTable.nuzMixupMode ~= 0 then
+        local charNum = CT_MARIO
+        if nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) > 0 then
+            repeat
+                charNum = math.random(0, #charTable)
+            until nuzlocke_get_character_state(charNum) == NUZLOCKE_CHAR_UNLOCKED
+        end
+
+        local charAlt = math.random(1, #charTable[charNum])
+        charSelect.character_set_current_number(charNum, charAlt)
+    end
+end
+
 local queueKill = -1
 local isDying = false
 local function queue_char_kill()
@@ -181,6 +195,7 @@ local function update()
             local charData = charTable[queueKill][1]
             djui_popup_create_global("Character Select Nuzlocke:\n"..color_to_string(charData.color.r*0.5 + 127, charData.color.g*0.5 + 127, charData.color.b*0.5 + 127)..charData.name.."\\#dcdcdc\\ was lost by "..network_get_player_text_color_string(0)..gNetworkPlayers[0].name, 2)
             queueKill = -1
+            randomize_character()
         end
     else
         isDying = false
@@ -617,11 +632,19 @@ local function set_lives_counter()
     hud_set_value(HUD_DISPLAY_LIVES, totalCharacters)
 end
 
+local function on_interact(m, o, int)
+    if int == INTERACT_STAR_OR_KEY then
+        randomize_character()
+    end
+end
+
 hook_event(HOOK_UPDATE, update)
 hook_event(HOOK_ON_DEATH, queue_char_kill)
 hook_event(HOOK_ON_SYNC_VALID, on_sync)
 hook_event(HOOK_MARIO_UPDATE, set_lives_counter)
 hook_event(HOOK_ON_PACKET_RECEIVE, on_packet_recieve)
+hook_event(HOOK_ON_LEVEL_INIT, randomize_character)
+hook_event(HOOK_ON_INTERACT, on_interact)
 _G.charSelect.hook_allow_menu_open(block_menu_in_stages)
 
 local function set_seed(msg)

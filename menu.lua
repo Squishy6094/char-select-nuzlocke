@@ -8,40 +8,36 @@ local MENU_STATE_MAIN = 1
 local MENU_STATE_NEW_RUN = 2
 
 -- Settings
-gGlobalSyncTable.nuzAllowMenu = mod_storage_load_integer(save_file_prefix("nuzAllowMenu"), 0)
+gGlobalSyncTable.nuzMixupMode = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
 gGlobalSyncTable.nuzOptionsDone = 0
+
+local function update_menu_toggle(toggle, toggleChange, min, max)
+    gGlobalSyncTable[toggle] = num_wrap(gGlobalSyncTable[toggle] + (toggleChange or 0), min, max)
+    mod_storage_save_integer(save_file_prefix(toggle), gGlobalSyncTable[toggle])
+end
 
 local menuOptions = {
     [MENU_STATE_MAIN] = {
-        function (isToggled)
-            if isToggled then
+        function (toggleChange)
+            if toggleChange ~= 0 then
                 gGlobalSyncTable.nuzOptionsDone = 1
             end
             return "Continue", "Description"
         end,
-        function (isToggled)
-            if isToggled then
+        function (toggleChange)
+            if toggleChange ~= 0 then
                 menuState = MENU_STATE_NEW_RUN
             end
             return "New Game", "Start a new Run with a set of settings"
         end,
     },
     [MENU_STATE_NEW_RUN] = {
-        function (isToggled)
+        function (toggleChange)
             -- Update toggle
-            if isToggled then
-                gGlobalSyncTable.nuzAllowMenu = (gGlobalSyncTable.nuzAllowMenu + 1)%3
-                mod_storage_save_integer(save_file_prefix("allowMenu"), gGlobalSyncTable.nuzAllowMenu)
-            end
+            update_menu_toggle("nuzMixupMode", toggleChange, 0, 1)
 
             -- Get Toggle String
-            if gGlobalSyncTable.nuzAllowMenu == 0 then
-                return "Menu Allowed: Hub Only", "Only Allows Switching Characters outside of Levels"
-            elseif gGlobalSyncTable.nuzAllowMenu == 1 then
-                return "Menu Allowed: Anytime", "Allows Switching Characters Anytime"
-            elseif gGlobalSyncTable.nuzAllowMenu == 2 then
-                return "Menu Allowed: Never", "Never Allows Opening the Menu, Randomly Switches\nyour Character on Star Collect and Death"
-            end
+            return "Mix-up Mode: "..(gGlobalSyncTable.nuzMixupMode ~= 0 and "On" or "Off"), "Randomly Set Character on Star Collect and Stage Entrance"
         end,
         function (isToggled)
             return "Toggle B", "Start a new Run with a set of settings"
@@ -52,8 +48,8 @@ local menuOptions = {
         function (isToggled)
             return "Toggle D", "Start a new Run with a set of settings"
         end,
-        function (isToggled)
-            if isToggled then
+        function (toggleChange)
+            if toggleChange ~= 0 then
                 reset_save()
                 gGlobalSyncTable.nuzOptionsDone = 1
             end
@@ -119,12 +115,21 @@ local function hud_render()
         if m.controller.buttonPressed & U_JPAD ~= 0 then
             menuCurrOption = menuCurrOption - 1
         end
+        menuCurrOption = num_wrap(menuCurrOption, 1, #menuOptions[menuState])
         if m.controller.buttonPressed & B_BUTTON ~= 0 then
             menuState = MENU_STATE_MAIN
         end
         for i = 1, #menuOptions[menuState] do
             local isHovered = i == menuCurrOption
-            local name, desc = menuOptions[menuState][i](isHovered and m.controller.buttonPressed & A_BUTTON ~= 0)
+            local change = 0
+            if m.controller.buttonPressed & A_BUTTON ~= 0 or m.controller.buttonPressed & R_JPAD ~= 0 then
+                change = 1
+            end
+            if m.controller.buttonPressed & L_JPAD ~= 0 then
+                change = -1
+            end
+
+            local name, desc = menuOptions[menuState][i](isHovered and change or 0)
             if isHovered then
                 djui_hud_set_color(255, 255, 127, 255)
             else

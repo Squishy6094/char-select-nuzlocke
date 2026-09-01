@@ -229,8 +229,6 @@ function nearest_object_with_behavior_id_to_pos(x, y, z, bhvId)
     return nearest, nearestDist
 end
 
--- passing a table like {255, 100, 20}
-
 function color_to_string(r, g, b)
 	local hexadecimal = ''
 
@@ -255,6 +253,10 @@ function color_to_string(r, g, b)
 	end
 
 	return "\\#"..hexadecimal.."\\"
+end
+
+function num_wrap(num, min, max)
+    return min + (num - min) % ((max + 1) - min)
 end
 
 -- Custom mulberry32 based rng funcs for cross-device-compatibility
