@@ -20,28 +20,32 @@ local SEED_MAX = 10000
 
 local characterMods = {}
 local function check_character_packs()
-    if not charTable then return end 
+    if not charTable or not network_is_server() then return end 
 
     for i = 0, #charTable do
         characterMods[charTable[i].modData.name] = 0
     end
 
-    for key, value in pairs(mod_storage_load_all()) do
-        if string.find(key, save_file_prefix("enabledPack")) then
-            if characterMods[value] == 0 then
-                characterMods[value] = 1
-            else
-                characterMods[value] = 2
+    local modStorage = mod_storage_load_all()
+
+    if modStorage then
+        for key, value in pairs(modStorage) do
+            if string.find(key, save_file_prefix("enabledPack")) then
+                if characterMods[value] == 0 then
+                    characterMods[value] = 1
+                else
+                    characterMods[value] = 2
+                end
             end
         end
-    end
 
-    for name, status in pairs(characterMods) do
-        if status == 0 then
-            continueError = continueError .. "\n\\#fff\\Extra Pack: " .. string.gsub(name, "_", " ")
-        end
-        if status == 2 then
-            continueError = continueError .. "\n\\#fff\\Missing Pack: " .. string.gsub(name, "_", " ")
+        for name, status in pairs(characterMods) do
+            if status == 0 then
+                continueError = continueError .. "\n\\#fff\\Extra Pack: " .. string.gsub(name, "_", " ")
+            end
+            if status == 2 then
+                continueError = continueError .. "\n\\#fff\\Missing Pack: " .. string.gsub(name, "_", " ")
+            end
         end
     end
 end
