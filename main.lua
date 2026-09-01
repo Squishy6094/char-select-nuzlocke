@@ -41,10 +41,10 @@ local function check_character_packs()
 
         for name, status in pairs(characterMods) do
             if status == 0 then
-                continueError = continueError .. "\n\\#fff\\Extra Pack: " .. string.gsub(name, "_", " ")
+                continueError = continueError .. "\n\\#fff\\Extra Pack: " .. name
             end
             if status == 2 then
-                continueError = continueError .. "\n\\#fff\\Missing Pack: " .. string.gsub(name, "_", " ")
+                continueError = continueError .. "\n\\#fff\\Missing Pack: " .. name
             end
         end
     end
