@@ -16,11 +16,6 @@ local NUZLOCKE_CHAR_DIED = 2
 
 local SEED_MAX = 10000
 
-local saveFile = get_current_save_file_num() - 1
-local function save_file_prefix(str)
-    return "saveFile"..tostring(saveFile)..(save_file_get_using_backup_slot() and "B" or "")..str
-end
-
 local function update_save(reset, seed)
     if not network_is_server() then return end
     if save_file_get_flags() < mod_storage_load_number(save_file_prefix("progress"), 0) or reset then
@@ -126,7 +121,7 @@ local function initial_setup()
     map_characters()
 end
 
-local function reset_new_game()
+local function reset_characters()
 	for i = 0, #charTable do
         nuzlocke_set_character_state(i, i == 0 and NUZLOCKE_CHAR_UNLOCKED or NUZLOCKE_CHAR_LOCKED)
 	end
@@ -142,7 +137,7 @@ local function queue_char_kill()
 end
 
 PACKET_TYPE_RESET = 1
-local function reset_save(seed, noSync)
+function reset_save(seed, noSync)
     save_file_erase(saveFile)
     save_file_do_save(saveFile, 1)
     save_file_reload(0)
@@ -154,7 +149,7 @@ local function reset_save(seed, noSync)
         oChar = obj_get_next_with_same_behavior_id(oChar)
     end
     update_save(true, seed)
-    reset_new_game()
+    reset_characters()
     if not noSync then
         network_send(true, {
             type = PACKET_TYPE_RESET,
@@ -162,6 +157,7 @@ local function reset_save(seed, noSync)
             seed = seed
         })
     end
+    gGlobalSyncTable.nuzOptionsDone = 1
 end
 
 local function on_packet_recieve(data)
@@ -227,7 +223,7 @@ local function update()
         mod_storage_save(save_file_prefix("charList"), charList)
 
         if nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) == 0 then
-            reset_save()
+            gGlobalSyncTable.nuzOptionsDone = 0
         end
     end
 end

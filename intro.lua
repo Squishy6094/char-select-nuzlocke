@@ -2,6 +2,66 @@ local TEX_LOGO = get_texture_info("char_select_logo")
 
 local introAnimFrame = 0
 local menuState = 0
+local menuCurrOption = 1
+
+local MENU_STATE_MAIN = 1
+local MENU_STATE_NEW_RUN = 2
+
+-- Settings
+gGlobalSyncTable.nuzAllowMenu = mod_storage_load_integer(save_file_prefix("nuzAllowMenu"), 0)
+gGlobalSyncTable.nuzOptionsDone = 0
+
+local menuOptions = {
+    [MENU_STATE_MAIN] = {
+        function (isToggled)
+            if isToggled then
+                gGlobalSyncTable.nuzOptionsDone = 1
+            end
+            return "Continue", "Description"
+        end,
+        function (isToggled)
+            if isToggled then
+                menuState = MENU_STATE_NEW_RUN
+            end
+            return "New Game", "Start a new Run with a set of settings"
+        end,
+    },
+    [MENU_STATE_NEW_RUN] = {
+        function (isToggled)
+            -- Update toggle
+            if isToggled then
+                gGlobalSyncTable.nuzAllowMenu = (gGlobalSyncTable.nuzAllowMenu + 1)%3
+                mod_storage_save_integer(save_file_prefix("allowMenu"), gGlobalSyncTable.nuzAllowMenu)
+            end
+
+            -- Get Toggle String
+            if gGlobalSyncTable.nuzAllowMenu == 0 then
+                return "Menu Allowed: Hub Only", "Only Allows Switching Characters outside of Levels"
+            elseif gGlobalSyncTable.nuzAllowMenu == 1 then
+                return "Menu Allowed: Anytime", "Allows Switching Characters Anytime"
+            elseif gGlobalSyncTable.nuzAllowMenu == 2 then
+                return "Menu Allowed: Never", "Never Allows Opening the Menu, Randomly Switches\nyour Character on Star Collect and Death"
+            end
+        end,
+        function (isToggled)
+            return "Toggle B", "Start a new Run with a set of settings"
+        end,
+        function (isToggled)
+            return "Toggle C", "Start a new Run with a set of settings"
+        end,
+        function (isToggled)
+            return "Toggle D", "Start a new Run with a set of settings"
+        end,
+        function (isToggled)
+            if isToggled then
+                reset_save()
+                gGlobalSyncTable.nuzOptionsDone = 1
+            end
+            return "Start Run", "Start the Run"
+        end,
+    },
+    
+}
 
 local logoXTarget = 0
 local logoYTarget = 0
@@ -11,7 +71,10 @@ local logoX
 local logoY
 local logoScale
 local logoShake
+
 local function hud_render()
+    if gGlobalSyncTable.nuzOptionsDone ~= 0 then return end
+    local m = gMarioStates[0]
     djui_hud_set_resolution(RESOLUTION_N64)
     local sW = djui_hud_get_screen_width() + 1
     local sH = djui_hud_get_screen_height()
@@ -30,6 +93,7 @@ local function hud_render()
         logoXTarget = 85
         logoYTarget = 45
         logoScaleTarget = 0.3
+        menuState = MENU_STATE_MAIN
     end
     logoShake = math.max(logoShake and math.lerp(logoShake, logoShakeTarget, 0.15) or logoShakeTarget, logoShakeTarget)
     if logoShakeTarget > 0 then
@@ -46,6 +110,30 @@ local function hud_render()
     djui_hud_render_texture(TEX_LOGO, -TEX_LOGO.width*logoScale*0.5 + logoX + (math.random()*2 - 1)*logoShake, -TEX_LOGO.height*logoScale*0.5 + logoY + (math.random()*2 - 1)*logoShake, logoScale, logoScale)
 
     introAnimFrame = introAnimFrame + 1
+
+    if menuOptions[menuState] then
+        local y = sH*0.5 - #menuOptions[menuState]*27*0.5
+        if m.controller.buttonPressed & D_JPAD ~= 0 then
+            menuCurrOption = menuCurrOption + 1
+        end
+        if m.controller.buttonPressed & U_JPAD ~= 0 then
+            menuCurrOption = menuCurrOption - 1
+        end
+        if m.controller.buttonPressed & B_BUTTON ~= 0 then
+            menuState = MENU_STATE_MAIN
+        end
+        for i = 1, #menuOptions[menuState] do
+            local isHovered = i == menuCurrOption
+            local name, desc = menuOptions[menuState][i](isHovered and m.controller.buttonPressed & A_BUTTON ~= 0)
+            if isHovered then
+                djui_hud_set_color(255, 255, 127, 255)
+            else
+                djui_hud_set_color(255, 255, 255, 255)
+            end
+            djui_hud_print_text(name, sW-150, y + (i-1)*27, 0.5, 0.5)
+            djui_hud_print_text(desc, sW-148, y + 16 + (i-1)*27, 0.2, 0.2)
+        end
+    end
 end
 
---hook_event(HOOK_ON_HUD_RENDER, hud_render)
+hook_event(HOOK_ON_HUD_RENDER, hud_render)

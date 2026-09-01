@@ -1,6 +1,11 @@
 oTagLib = require("libs/oTagLib")
 charSelectObjs = require("libs/charSelectObjs")
 
+saveFile = get_current_save_file_num() - 1
+function save_file_prefix(str)
+    return "saveFile"..tostring(saveFile)..(save_file_get_using_backup_slot() and "B" or "")..str
+end
+
 local stallFrame = 0
 local stallComplete = 3
 function startup_init_stall(framesBefore)
