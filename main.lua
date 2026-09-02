@@ -12,9 +12,9 @@ if gServerSettings.playerInteractions == PLAYER_INTERACTIONS_PVP then
     gServerSettings.playerInteractions = PLAYER_INTERACTIONS_SOLID
 end
 
-local NUZLOCKE_CHAR_LOCKED = 0
-local NUZLOCKE_CHAR_UNLOCKED = 1
-local NUZLOCKE_CHAR_DIED = 2
+NUZLOCKE_CHAR_LOCKED = 0
+NUZLOCKE_CHAR_UNLOCKED = 1
+NUZLOCKE_CHAR_DIED = 2
 
 local SEED_MAX = 10000
 
@@ -57,10 +57,16 @@ local function update_save(reset, seed)
         -- Assume if progress is lost, that the save had been deleted
         log_to_console("Character Select Nuzlocke: Save Data Lost, Deleting Custom Save Flags!", CONSOLE_MESSAGE_WARNING)
         mod_storage_remove(save_file_prefix("seed"))
-        local charFieldList = string_split(mod_storage_load(save_file_prefix("charList"), ""))
-        for _, charName in pairs(charFieldList) do
-            mod_storage_remove(save_file_prefix("charState"..charName))
+        -- Clear Collected Char Flags
+        local modStorage = mod_storage_load_all()
+        if modStorage then
+            for key, value in pairs(modStorage) do
+                if string.find(key, save_file_prefix("charState")) then
+                    mod_storage_remove(key)
+                end
+            end
         end
+
         mod_storage_save_integer(save_file_prefix("progress"), 0)
     else
         mod_storage_save_integer(save_file_prefix("progress"), save_file_get_flags())
@@ -76,17 +82,17 @@ local function block_menu_in_stages()
     return gNetworkPlayers[0].currCourseNum == 0
 end
 
-local function nuzlocke_set_character_state(charNum, charState)
+function nuzlocke_set_character_state(charNum, charState)
     if not charTable or not charNum or not charState then return end
     gGlobalSyncTable["charState"..charTable[charNum].saveName] = charState
 end
 
-local function nuzlocke_get_character_state(charNum)
+function nuzlocke_get_character_state(charNum)
     if not charTable or not charNum then return end
     return gGlobalSyncTable["charState"..charTable[charNum].saveName]
 end
 
-local function nuzlocke_count_character_state(charState)
+function nuzlocke_count_character_state(charState)
     local count = 0
     for charNum, _ in pairs(charTable) do
         if nuzlocke_get_character_state(charNum) == charState then
@@ -116,6 +122,7 @@ local function map_characters()
 
     nuzlocke_seed_rng()
     
+    local levelLoop = 0
     repeat
         for levelNum, levelTable in pairs(charLevelMap) do
             if mappedCharCount >= #charTable then break end
@@ -136,7 +143,8 @@ local function map_characters()
             mappedChars[charNum] = true
             mappedCharCount = mappedCharCount + 1
         end
-    until mappedCharCount >= #charTable
+        levelLoop = levelLoop + 1
+    until mappedCharCount >= #charTable or (gGlobalSyncTable.nuzCharsInLevel > 0 and gGlobalSyncTable.nuzCharsInLevel <= levelLoop)
 end
 
 local prevUnlockState = {}
@@ -233,7 +241,7 @@ local function update()
 		charTable = _G.charSelect.character_get_full_table()
         check_character_packs()
         initial_setup()
-        if mod_storage_load_integer(save_file_prefix("progress"), 0) == 0 then
+        if mod_storage_load_integer(save_file_prefix("progress"), 0) == 0 and nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) <= 1 then
             continueError = "\nNo Save Data"
         end
         syncedClient = true

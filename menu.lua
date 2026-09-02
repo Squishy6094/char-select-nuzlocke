@@ -36,6 +36,7 @@ end
 
 -- Settings
 gGlobalSyncTable.nuzMixupMode = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
+gGlobalSyncTable.nuzCharsInLevel = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
 gGlobalSyncTable.nuzOptionsDone = 0
 
 local function update_menu_toggle(toggle, toggleChange, min, max)
@@ -52,7 +53,9 @@ local menuOptions = {
                 if toggleChange ~= 0 then
                     gGlobalSyncTable.nuzOptionsDone = 1
                 end
-                return "Continue", "Continue your existing run"
+                local stars = hud_get_value(HUD_DISPLAY_STARS)
+                local chars = nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED)
+                return "Continue", "Continue your existing run with ".. stars .." Star"..(stars ~= 1 and "s" or "").." and "..chars.." Character"..(chars ~= 1 and "s" or "")
             end
         end,
         function (toggleChange)
@@ -70,13 +73,16 @@ local menuOptions = {
             -- Get Toggle String
             return "Mix-up Mode: "..(gGlobalSyncTable.nuzMixupMode ~= 0 and "On" or "Off"), "Randomly Set Character on Star Collect and Stage Entrance"
         end,
-        function (isToggled)
-            return "Toggle B", "Start a new Run with a set of settings"
+        function (toggleChange)
+            update_menu_toggle("nuzCharsInLevel", toggleChange, 0, 3)
+            local toggle = gGlobalSyncTable.nuzCharsInLevel
+            return "Characters Per Level: "..(toggle > 0 and tostring(toggle) or "Max"), 
+            (toggle > 0 and "Each Level will have "..tostring(toggle).." Character"..(toggle > 1 and "s" or "") or "Every Character will be mapped to a level.")
         end,
-        function (isToggled)
+        function (toggleChange)
             return "Toggle C", "Start a new Run with a set of settings"
         end,
-        function (isToggled)
+        function (toggleChange)
             return "Toggle D", "Start a new Run with a set of settings"
         end,
         function (toggleChange)
@@ -139,17 +145,17 @@ local function hud_render()
     introAnimFrame = introAnimFrame + 1
 
     if menuOptions[menuState] and network_is_server() then
-        local y = sH*0.5 - #menuOptions[menuState]*27*0.5
         if m.controller.buttonPressed & D_JPAD ~= 0 then
             menuCurrOption = menuCurrOption + 1
         end
         if m.controller.buttonPressed & U_JPAD ~= 0 then
             menuCurrOption = menuCurrOption - 1
         end
-        menuCurrOption = num_wrap(menuCurrOption, 1, #menuOptions[menuState])
         if m.controller.buttonPressed & B_BUTTON ~= 0 then
             menuState = MENU_STATE_MAIN
         end
+        local y = sH*0.5 - #menuOptions[menuState]*27*0.5
+        menuCurrOption = num_wrap(menuCurrOption, 1, #menuOptions[menuState])
         for i = 1, #menuOptions[menuState] do
             local isHovered = i == menuCurrOption
             local change = 0
