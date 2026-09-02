@@ -129,7 +129,6 @@ local function map_characters()
             local charNum = 0
             repeat 
                 charNum = mul_random(1, #charTable)
-                print(charNum)
             until not mappedChars[charNum]
             
             table.insert(levelTable[areaNum], charNum)
@@ -433,6 +432,7 @@ local levelMinX = -0x4000
 local levelMaxX = 0x4000
 local levelMinZ = -0x4000
 local levelMaxZ = 0x4000
+local checkCount = 10
 local function find_level_bounds()
     levelMinX = -0x4000
     levelMaxX = 0x4000
@@ -443,8 +443,8 @@ local function find_level_bounds()
     local dist = nil
     for distMult = 16, 0, -1 do
         if not dist then
-            for i = -5, 5 do
-                local ray = collision_find_surface_on_ray(levelMinX*(distMult/16), 0x4000, 0x4000*(i/5), 0, -0x8000, 0, 1)
+            for i = -checkCount, checkCount do
+                local ray = collision_find_surface_on_ray(levelMinX*(distMult/16), 0x4000, 0x4000*(i/checkCount), 0, -0x8000, 0, 1)
                 if ray.surface ~= nil then
                     dist = ray.hitPos.x
                 end
@@ -457,8 +457,8 @@ local function find_level_bounds()
     local dist = nil
     for distMult = 16, 0, -1 do
         if not dist then
-            for i = -5, 5 do
-                local ray = collision_find_surface_on_ray(levelMaxX*(distMult/16), 0x4000, 0x4000*(i/5), 0, -0x8000, 0, 1)
+            for i = -checkCount, checkCount do
+                local ray = collision_find_surface_on_ray(levelMaxX*(distMult/16), 0x4000, 0x4000*(i/checkCount), 0, -0x8000, 0, 1)
                 if ray.surface ~= nil then
                     dist = ray.hitPos.x
                 end
@@ -472,8 +472,8 @@ local function find_level_bounds()
     local dist = nil
     for distMult = 16, 0, -1 do
         if not dist then
-            for i = -5, 5 do
-                local ray = collision_find_surface_on_ray(0x4000*(i/5), 0x4000, levelMinZ*(distMult/16), 0, -0x8000, 0, 1)
+            for i = -checkCount, checkCount do
+                local ray = collision_find_surface_on_ray(0x4000*(i/checkCount), 0x4000, levelMinZ*(distMult/16), 0, -0x8000, 0, 1)
                 if ray.surface ~= nil then
                     dist = ray.hitPos.z
                 end
@@ -486,8 +486,8 @@ local function find_level_bounds()
     local dist = nil
     for distMult = 16, 0, -1 do
         if not dist then
-            for i = -5, 5 do
-                local ray = collision_find_surface_on_ray(0x4000*(i/5), 0x4000, levelMaxZ*(distMult/16), 0, -0x8000, 0, 1)
+            for i = -checkCount, checkCount do
+                local ray = collision_find_surface_on_ray(0x4000*(i/checkCount), 0x4000, levelMaxZ*(distMult/16), 0, -0x8000, 0, 1)
                 if ray.surface ~= nil then
                     dist = ray.hitPos.z
                 end
@@ -495,6 +495,12 @@ local function find_level_bounds()
         end
     end
     levelMaxZ = dist and math.round(dist) or levelMaxZ
+
+    djui_chat_message_create(tostring("-----"))
+    djui_chat_message_create(tostring(levelMinX))
+    djui_chat_message_create(tostring(levelMaxX))
+    djui_chat_message_create(tostring(levelMinZ))
+    djui_chat_message_create(tostring(levelMaxZ))
 end
 
 local function find_character_spawn()
@@ -504,7 +510,10 @@ local function find_character_spawn()
     while spawnPos == nil do
         local spawnStep = 0
         spawnIteration = spawnIteration + 1
-        local ray = collision_find_surface_on_ray(mul_random(levelMinX, levelMaxX), 0x4000, mul_random(levelMinZ, levelMaxZ), 0, -0x8000, 0, 1)
+        local ray = collision_find_surface_on_ray(mul_random(levelMinX, levelMaxX), 0x4000, mul_random(levelMinZ, levelMaxZ), 0, -0x8000, 0)
+        while ray.surface and ray.surface.normal.y < 0.5 do
+            ray = collision_find_surface_on_ray(ray.hitPos.x, ray.hitPos.y - 100, ray.hitPos.z, 0, -0x8000, 0)
+        end
         if ray.surface and not evilFloorTypes[ray.surface.type] and ray.surface.normal.y > 0.95 and (ray.hitPos.y > find_water_level(ray.hitPos.x, ray.hitPos.z) or spawnIteration > 1000) then
             spawnStep = spawnStep + 1
             local surfaceX = (ray.surface.vertex1.x + ray.surface.vertex2.x + ray.surface.vertex3.x)/3
@@ -559,8 +568,8 @@ local function find_character_spawn()
             end
         end 
 
-        if get_time() - spawnStart > 10 then
-            log_to_console(tostring("Character Select Nuzlocke: Character took 10 Seconds after "..tostring(spawnIteration).." iterations, got stuck on Step "..tostring(spawnStep)..", giving up."), CONSOLE_MESSAGE_ERROR)
+        if get_time() - spawnStart > 3 then
+            log_to_console(tostring("Character Select Nuzlocke: Character took 3 Seconds after "..tostring(spawnIteration).." iterations, got stuck on Step "..tostring(spawnStep)..", giving up."), CONSOLE_MESSAGE_ERROR)
             return {x = 0, y = 0, z = 0, yaw = 0}
         end
     end
@@ -623,9 +632,9 @@ local function find_griffiti_spawn()
             end
         end 
 
-        if get_time() - spawnStart > 10 then
-            log_to_console(tostring("Character Select Nuzlocke: Graffiti took 10 Seconds after "..tostring(spawnIteration).." iterations, got stuck on Step "..tostring(spawnStep)..", giving up."), CONSOLE_MESSAGE_ERROR)
-            return {x = 0, y = 0, z = 0, yaw = 0}
+        if get_time() - spawnStart > 1 then
+            log_to_console(tostring("Character Select Nuzlocke: Graffiti took 1 Second after "..tostring(spawnIteration).." iterations, got stuck on Step "..tostring(spawnStep)..", giving up."), CONSOLE_MESSAGE_ERROR)
+            return
         end
     end
 
@@ -655,18 +664,20 @@ local function on_sync()
             for i, charNum in pairs(areaData) do
                 for i = 1, mul_random(1, 3) do
                     local graffitiSpawn = find_griffiti_spawn()
-                    spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
-                        local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
-                        local tilt = 0
-                        local pitch = atan2s(math.sqrt(graffitiSpawn.normal.x * graffitiSpawn.normal.x + graffitiSpawn.normal.z * graffitiSpawn.normal.z), graffitiSpawn.normal.y)
-                        o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
-                        o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
-                        o.oFaceAngleYaw = slopeAngle + tilt
-                        
-                        --o.oFaceAngleRoll = mul_random(-0x1000, 0x1000)
-                        obj_scale(o, 1 + mul_random())
-                        o.oCharNum = charNum
-                    end)
+                    if graffitiSpawn then
+                        spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
+                            local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
+                            local tilt = 0
+                            local pitch = atan2s(math.sqrt(graffitiSpawn.normal.x * graffitiSpawn.normal.x + graffitiSpawn.normal.z * graffitiSpawn.normal.z), graffitiSpawn.normal.y)
+                            o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
+                            o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
+                            o.oFaceAngleYaw = slopeAngle + tilt
+                            
+                            --o.oFaceAngleRoll = mul_random(-0x1000, 0x1000)
+                            obj_scale(o, 1 + mul_random())
+                            o.oCharNum = charNum
+                        end)
+                    end
                 end
             end
         end

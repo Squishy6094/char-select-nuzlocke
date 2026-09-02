@@ -138,7 +138,7 @@ local function hud_render()
 
     introAnimFrame = introAnimFrame + 1
 
-    if menuOptions[menuState] then
+    if menuOptions[menuState] and network_is_server() then
         local y = sH*0.5 - #menuOptions[menuState]*27*0.5
         if m.controller.buttonPressed & D_JPAD ~= 0 then
             menuCurrOption = menuCurrOption + 1
