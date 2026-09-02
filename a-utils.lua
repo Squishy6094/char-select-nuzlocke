@@ -76,12 +76,13 @@ local sLevelTable = {
 }
 
 charLevelMap = {}
+charLevelMapCount = 0
 local function find_valid_areas()
     local isRomhack = false
     for i = 0, LEVEL_COUNT - 1 do
         if sLevelTable[i] and not level_is_vanilla_level(i) then
             isRomhack = true
-            log_to_console("mwahh")
+            break
         end
     end
     
@@ -102,6 +103,7 @@ local function find_valid_areas()
                 end
                 log_to_console("   "..i.. " - " .. get_level_name(get_level_course_num(i), i, 1) .. " has valid areas: "..string.sub(debugValid, 1, -3))
             end
+            charLevelMapCount = charLevelMapCount + 1
         end
     end
 end

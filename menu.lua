@@ -74,16 +74,13 @@ local menuOptions = {
             return "Mix-up Mode: "..(gGlobalSyncTable.nuzMixupMode ~= 0 and "On" or "Off"), "Randomly Set Character on Star Collect and Stage Entrance"
         end,
         function (toggleChange)
-            update_menu_toggle("nuzCharsInLevel", toggleChange, 0, 3)
+            local maxPer = math.ceil(#charTable/charLevelMapCount)
+            local perfectCount = maxPer == #charTable/charLevelMapCount
+            update_menu_toggle("nuzCharsInLevel", toggleChange, 1, maxPer)
             local toggle = gGlobalSyncTable.nuzCharsInLevel
-            return "Characters Per Level: "..(toggle > 0 and tostring(toggle) or "Max"), 
-            (toggle > 0 and "Each Level will have "..tostring(toggle).." Character"..(toggle > 1 and "s" or "") or "Every Character will be mapped to a level.")
-        end,
-        function (toggleChange)
-            return "Toggle C", "Start a new Run with a set of settings"
-        end,
-        function (toggleChange)
-            return "Toggle D", "Start a new Run with a set of settings"
+            return "Characters Per Level: "..toggle, 
+            "Each Level will have "..((toggle == maxPer and not perfectCount) and ((toggle - 1).."-") or "")..toggle.." Character"..(toggle > 1 and "s" or "")..
+            "\n(You have "..#charTable.." Characters for "..charLevelMapCount.." Levels)"
         end,
         function (toggleChange)
             if toggleChange ~= 0 then

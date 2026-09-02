@@ -529,7 +529,9 @@ local function find_character_spawn()
             local surfaceZ = (ray.surface.vertex1.z + ray.surface.vertex2.z + ray.surface.vertex3.z)/3
 
             local avoidChar = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvUnlockableChar)
+            local avoidWarp = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvWarp)
             local avoidDoorWarp = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvDoorWarp)
+            local avoidWarpPipe = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvWarpPipe)
 
             local smallestEdge = nil
             for i = 0, 2 do
@@ -544,7 +546,9 @@ local function find_character_spawn()
             end
 
             local avoidDist = math.min(avoidChar and dist_between_object_and_point(avoidChar, surfaceX, surfaceY, surfaceZ) or 0x8000,
-                avoidDoorWarp and dist_between_object_and_point(avoidDoorWarp, surfaceX, surfaceY, surfaceZ) or 0x8000)
+                avoidWarp and dist_between_object_and_point(avoidWarp, surfaceX, surfaceY, surfaceZ) or 0x8000,
+                avoidDoorWarp and dist_between_object_and_point(avoidDoorWarp, surfaceX, surfaceY, surfaceZ) or 0x8000,
+                avoidWarpPipe and dist_between_object_and_point(avoidWarpPipe, surfaceX, surfaceY, surfaceZ) or 0x8000)
 
             if (avoidDist > 100 or spawnIteration > 5000) and (smallestEdge > 100 and smallestEdge < (500 + spawnIteration)) then --- math.floor(spawnIteration/100)*100 then
                 local outofBounds = false
