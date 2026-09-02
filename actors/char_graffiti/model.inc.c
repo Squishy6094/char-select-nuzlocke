@@ -16416,7 +16416,6 @@ Gfx char_graffiti_char_graffiti_mesh_layer_5_tri_0[] = {
 
 
 Gfx mat_char_graffiti_graffiti[] = {
-	gsSPClearGeometryMode(G_CULL_BACK),
 	gsSPSetLights1(char_graffiti_graffiti_lights),
 	gsDPPipeSync(),
 	gsDPSetCombineLERP(TEXEL0, 0, SHADE, 0, TEXEL0, 0, PRIMITIVE, 0, TEXEL0, 0, SHADE, 0, TEXEL0, 0, PRIMITIVE, 0),
@@ -16432,7 +16431,6 @@ Gfx mat_char_graffiti_graffiti[] = {
 };
 
 Gfx mat_revert_char_graffiti_graffiti[] = {
-	gsSPSetGeometryMode(G_CULL_BACK),
 	gsDPPipeSync(),
 	gsDPSetAlphaDither(G_AD_DISABLE),
 	gsSPEndDisplayList(),

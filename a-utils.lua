@@ -101,7 +101,6 @@ local function find_valid_areas()
                 for area, _ in pairs(charLevelMap[i]) do
                     debugValid = debugValid..area..", "
                 end
-                log_to_console("   "..i.. " - " .. get_level_name(get_level_course_num(i), i, 1) .. " has valid areas: "..string.sub(debugValid, 1, -3))
             end
             charLevelMapCount = charLevelMapCount + 1
         end
