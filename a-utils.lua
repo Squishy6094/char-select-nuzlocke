@@ -251,3 +251,9 @@ end
 for i = 0, 100 do
     print("DebugTest " .. i .. " - " ..mul_random())
 end
+
+function get_surface_center(surface)
+    return (surface.vertex1.x + surface.vertex2.x + surface.vertex3.x)/3,
+    (surface.vertex1.y + surface.vertex2.y + surface.vertex3.y)/3,
+    (surface.vertex1.z + surface.vertex2.z + surface.vertex3.z)/3
+end
