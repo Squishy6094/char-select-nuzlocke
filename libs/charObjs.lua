@@ -388,11 +388,6 @@ local function character_obj_before_geo_process(node, _)
     end 
 end
 
-local function character_obj_on_geo_process(node, _)
-    local o = geo_get_current_object()
-    if not o or o.oIsChar == 0 then return end
-end
-
 local function reset_mario_palette(m)
     m = m or gMarioStates[0]
     if m.playerIndex ~= 0 then return end
@@ -422,7 +417,6 @@ end
 hook_event(HOOK_BEFORE_MARIO_UPDATE, reset_mario_palette)
 hook_event(HOOK_UPDATE, reset_mario_palette)
 hook_event(HOOK_BEFORE_GEO_PROCESS, character_obj_before_geo_process)
-hook_event(HOOK_ON_GEO_PROCESS, character_obj_on_geo_process)
 
 hook_event(HOOK_ON_OBJECT_UNLOAD, function(o)
     charModelData[o] = nil -- table cleanup
