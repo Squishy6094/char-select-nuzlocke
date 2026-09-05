@@ -284,6 +284,18 @@ local modelRevert = {
     }
 }
 
+local og_network_player_get_override_palette_color = network_player_get_override_palette_color
+
+---@param np NetworkPlayer
+---@param part PlayerPart
+_G.network_player_get_override_palette_color = function(np, part)
+    if np.localIndex ~= 0 or not modelRevert.marioProcessed then
+        return og_network_player_get_override_palette_color(np, part)
+    else
+        return modelRevert.palette[part]
+    end
+end
+
 local blinkAnim = {
     MARIO_EYES_HALF_CLOSED,
     MARIO_EYES_CLOSED,
@@ -305,10 +317,37 @@ local fallbackPalette = {
     [EMBLEM] = { r = 0xff, g = 0x00, b = 0x00 },
 }
 
+local function reset_mario_palette(m)
+    m = type(m) == "userdata" and m or gMarioStates[0]
+    if m.playerIndex ~= 0 then return end
+    if modelRevert.marioProcessed then
+        for i = PANTS, EMBLEM do
+            network_player_set_override_palette_color(np, i, modelRevert.palette[i])
+        end
+
+        m.marioBodyState.eyeState = modelRevert.eyeState
+        m.marioBodyState.handState = modelRevert.handState
+        m.marioBodyState.capState = modelRevert.capState
+        m.marioBodyState.punchState = modelRevert.punchState
+        m.marioBodyState.modelState = modelRevert.modelState
+        m.fadeWarpOpacity = modelRevert.fadeWarpOpacity
+        vec3f_copy(m.marioBodyState.heldObjLastPosition, modelRevert.holp)
+        m.heldObj = modelRevert.heldObj
+        m.marioBodyState.allowPartRotation = modelRevert.allowPartRotation
+        vec3s_copy(m.marioBodyState.torsoAngle, modelRevert.torsoAngle)
+        vec3s_copy(m.marioBodyState.headAngle, modelRevert.headAngle)
+        vec3f_copy(m.marioBodyState.headPos, modelRevert.headPos)
+        vec3s_copy(m.statusForCamera.headRotation, modelRevert.headRotation)
+
+        modelRevert.marioProcessed = false
+    end
+end
+
 local function character_obj_before_geo_process(node, _)
     local o = geo_get_current_object()
     if not o then return end
     if obj_has_behavior_id(o, id_bhvMario) ~= 0 then
+        reset_mario_palette()
     elseif o.oIsChar ~= 0 then
         local modelData = charModelData[o] or {}
         local charPalette = modelData.palette or {}
@@ -324,7 +363,7 @@ local function character_obj_before_geo_process(node, _)
         end
 
         for i = PANTS, EMBLEM do
-            local playerColor = network_player_get_override_palette_color(np, i)
+            local playerColor = og_network_player_get_override_palette_color(np, i)
             modelRevert.palette[i] = {
                 r = playerColor.r,
                 g = playerColor.g,
@@ -388,34 +427,8 @@ local function character_obj_before_geo_process(node, _)
     end 
 end
 
-local function reset_mario_palette(m)
-    m = m or gMarioStates[0]
-    if m.playerIndex ~= 0 then return end
-    if modelRevert.marioProcessed then
-        for i = PANTS, EMBLEM do
-            network_player_set_override_palette_color(np, i, modelRevert.palette[i])
-        end
-
-        m.marioBodyState.eyeState = modelRevert.eyeState
-        m.marioBodyState.handState = modelRevert.handState
-        m.marioBodyState.capState = modelRevert.capState
-        m.marioBodyState.punchState = modelRevert.punchState
-        m.marioBodyState.modelState = modelRevert.modelState
-        m.fadeWarpOpacity = modelRevert.fadeWarpOpacity
-        vec3f_copy(m.marioBodyState.heldObjLastPosition, modelRevert.holp)
-        m.heldObj = modelRevert.heldObj
-        m.marioBodyState.allowPartRotation = modelRevert.allowPartRotation
-        vec3s_copy(m.marioBodyState.torsoAngle, modelRevert.torsoAngle)
-        vec3s_copy(m.marioBodyState.headAngle, modelRevert.headAngle)
-        vec3f_copy(m.marioBodyState.headPos, modelRevert.headPos)
-        vec3s_copy(m.statusForCamera.headRotation, modelRevert.headRotation)
-
-        modelRevert.marioProcessed = false
-    end
-end
-
 hook_event(HOOK_BEFORE_MARIO_UPDATE, reset_mario_palette)
-hook_event(HOOK_UPDATE, reset_mario_palette)
+hook_event(HOOK_BEFORE_PLAY_MODE_UPDATE, reset_mario_palette)
 hook_event(HOOK_BEFORE_GEO_PROCESS, character_obj_before_geo_process)
 
 hook_event(HOOK_ON_OBJECT_UNLOAD, function(o)
