@@ -345,9 +345,8 @@ end
 
 local function character_obj_before_geo_process(node, _)
     local o = geo_get_current_object()
-    if not o then return end
+    if not o or o.activeFlags == ACTIVE_FLAG_DEACTIVATED then return end
     if obj_has_behavior_id(o, id_bhvMario) ~= 0 then
-        reset_mario_palette()
     elseif o.oIsChar ~= 0 then
         local modelData = charModelData[o] or {}
         local charPalette = modelData.palette or {}

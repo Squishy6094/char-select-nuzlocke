@@ -433,6 +433,7 @@ id_bhvUnlockableChar = hook_behavior(nil, OBJ_LIST_DEFAULT, false, bhv_unlockabl
 
 local E_MODEL_GRAFFITI = smlua_model_util_get_id("char_graffiti_geo")
 
+---@param o Object
 local function bhv_char_graffiti_init(o)
     o.oFlags = OBJ_FLAG_UPDATE_GFX_POS_AND_ANGLE
     if nuzlocke_get_character_state(o.oAnimState) ~= NUZLOCKE_CHAR_LOCKED then
@@ -444,8 +445,24 @@ local function bhv_char_graffiti_init(o)
     })
 end
 
+---@param o Object
 local function bhv_char_graffiti_loop(o)
-    
+    if o.oFloor.room == 0 or current_mario_room_check(o.oFloor.room) ~= 0 then
+        cur_obj_unhide()
+    else
+        cur_obj_hide()
+    end
+
+    o.oPosX = (o.oFloor.vertex1.x + o.oFloor.vertex2.x + o.oFloor.vertex3.x)/3
+    o.oPosY = (o.oFloor.vertex1.y + o.oFloor.vertex2.y + o.oFloor.vertex3.y)/3
+    o.oPosZ = (o.oFloor.vertex1.z + o.oFloor.vertex2.z + o.oFloor.vertex3.z)/3
+
+    local slopeAngle = atan2s(o.oFloor.normal.z, o.oFloor.normal.x)
+    local tilt = 0
+    local pitch = atan2s(math.sqrt(o.oFloor.normal.x * o.oFloor.normal.x + o.oFloor.normal.z * o.oFloor.normal.z), o.oFloor.normal.y)
+    o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
+    o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
+    o.oFaceAngleYaw = slopeAngle + tilt
 end
 
 id_bhvCharGraffiti = hook_behavior(nil, OBJ_LIST_DEFAULT, false, bhv_char_graffiti_init, bhv_char_graffiti_loop)
@@ -736,12 +753,8 @@ local function find_griffiti_spawn()
                         x = spawnX,
                         y = spawnY,
                         z = spawnZ,
-                        normal = {
-                            x = ray.surface.normal.x,
-                            y = ray.surface.normal.y,
-                            z = ray.surface.normal.z,
-                        },
                         edge = smallestEdge,
+                        surface = ray.surface,
                     }
                 end
             end
@@ -784,14 +797,8 @@ local function character_spawn_handler()
                     local graffitiSpawn = find_griffiti_spawn()
                     if graffitiSpawn then
                         spawn_sync_object(id_bhvCharGraffiti, E_MODEL_GRAFFITI, graffitiSpawn.x, graffitiSpawn.y, graffitiSpawn.z, function(o)
-                            local slopeAngle = atan2s(graffitiSpawn.normal.z, graffitiSpawn.normal.x)
-                            local tilt = 0
-                            local pitch = atan2s(math.sqrt(graffitiSpawn.normal.x * graffitiSpawn.normal.x + graffitiSpawn.normal.z * graffitiSpawn.normal.z), graffitiSpawn.normal.y)
-                            o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
-                            o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
-                            o.oFaceAngleYaw = slopeAngle + tilt
-                            
-                            --o.oFaceAngleRoll = mul_random(-0x1000, 0x1000)
+                            o.oFloor = graffitiSpawn.surface
+                            bhv_char_graffiti_loop(o)
                             obj_scale(o, math.clamp(graffitiSpawn.edge/350, 0.5, 5))
                             o.oAnimState = charNum
                         end)
