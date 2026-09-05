@@ -324,6 +324,7 @@ local function bhv_unlockable_char_init(o)
     o.globalPlayerIndex = 0
     o.hitboxRadius = 80
     o.hitboxHeight = 160
+    o.oOpacity = 255
     tagColor = {
         r = charTable[o.oCharNum][1].color.r * 0.5 + 127,
         g = charTable[o.oCharNum][1].color.g * 0.5 + 127,
@@ -341,40 +342,65 @@ local function bhv_unlockable_char_init(o)
     })
 end
 
+local charRandomSounds = {
+    CHAR_SOUND_HAHA,
+    CHAR_SOUND_HAHA_2,
+    CHAR_SOUND_IMA_TIRED,
+    CHAR_SOUND_YAWNING, 
+    CHAR_SOUND_WHOA
+}
+
 ---@param o Object
 local function bhv_unlockable_char_loop(o)
-    charSelectObjs.character_obj_loop(o)
+    charObjs.character_obj_loop(o)
     o.oIntangibleTimer = -1
+    local modelState = charObjs.character_obj_get_model_data(o)
     local nM = nearest_mario_state_to_object(o) ---@type MarioState
 
     if o.oAction == 0 then
-        charSelectObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
-        if nM and obj_check_hitbox_overlap(o, nM.marioObj) then
-            nuzlocke_set_character_state(o.oCharNum, NUZLOCKE_CHAR_UNLOCKED)
-            if sync_object_is_owned_locally(o.oSyncID) then
-                local charData = charTable[o.oCharNum][1]
-                djui_popup_create_global("Character Select Nuzlocke:\n"..color_to_string(charData.color.r*0.5 + 127, charData.color.g*0.5 + 127, charData.color.b*0.5 + 127)..charData.name.."\\#dcdcdc\\ was found by "..network_get_player_text_color_string(nM.playerIndex)..gNetworkPlayers[nM.playerIndex].name, 2)
+        charObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
+        if sync_object_is_owned_locally(o.oSyncID) then
+            if o.oTimer > 150 and math.random() < 0.1 then
+                o.oSubAction = math.random(1, #charRandomSounds)
+                o.oTimer = 0
+                network_send_object(o, true)
             end
-            o.oAction = o.oAction + 1
-            network_send_object(o, true)
+            
+
+            if nM then
+                -- Unlock Character
+                if obj_check_hitbox_overlap(o, nM.marioObj) then
+                    nuzlocke_set_character_state(o.oCharNum, NUZLOCKE_CHAR_UNLOCKED)
+                    local charData = charTable[o.oCharNum][1]
+                    djui_popup_create_global("Character Select Nuzlocke:\n"..color_to_string(charData.color.r*0.5 + 127, charData.color.g*0.5 + 127, charData.color.b*0.5 + 127)..charData.name.."\\#dcdcdc\\ was found by "..network_get_player_text_color_string(nM.playerIndex)..gNetworkPlayers[nM.playerIndex].name, 2)
+                    o.oAction = o.oAction + 1
+                    network_send_object(o, true)
+                end
+            end
+        end
+
+        if o.oSubAction ~= 0 then
+            charObjs.character_obj_play_sound(o, charRandomSounds[o.oSubAction])
+            o.oSubAction = 0
         end
     elseif o.oAction == 1 then
         if o.oTimer == 0 then
-            charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_YAH_WAH_HOO)
+            charObjs.character_obj_play_sound(o, CHAR_SOUND_YAH_WAH_HOO)
             o.oVelY = 30
         end
-        charSelectObjs.character_obj_set_animation(o, MARIO_ANIM_SINGLE_JUMP)
+        charObjs.character_obj_set_animation(o, MARIO_ANIM_SINGLE_JUMP)
         o.oVelY = o.oVelY - 2
         if o.oVelY < -5 then
             o.oAction = o.oAction + 1
             network_send_object(o, true)
         end
     elseif o.oAction == 2 then
+        o.oOpacity = math.round((1 - math.max(o.oVelY - 20, 0) / 30) * 255)
         if o.oTimer == 0 then
-            charSelectObjs.character_obj_play_sound(o, CHAR_SOUND_HERE_WE_GO)
+            charObjs.character_obj_play_sound(o, CHAR_SOUND_HERE_WE_GO)
         end
-        charSelectObjs.character_obj_set_animation(o, MARIO_ANIM_DOUBLE_JUMP_RISE)
-        o.oCharHandState = MARIO_HAND_OPEN
+        charObjs.character_obj_set_animation(o, MARIO_ANIM_DOUBLE_JUMP_RISE)
+        modelState.handState = MARIO_HAND_OPEN
         o.oVelY = o.oVelY + 0.5
         o.oMoveAngleYaw = o.oMoveAngleYaw + math.clamp((o.oVelY + 5)*0x100, 0, 0x1800)
         if o.oVelY > 50 then
@@ -409,12 +435,12 @@ local E_MODEL_GRAFFITI = smlua_model_util_get_id("char_graffiti_geo")
 
 local function bhv_char_graffiti_init(o)
     o.oFlags = OBJ_FLAG_UPDATE_GFX_POS_AND_ANGLE
-    if nuzlocke_get_character_state(o.oCharNum) ~= NUZLOCKE_CHAR_LOCKED then
+    if nuzlocke_get_character_state(o.oAnimState) ~= NUZLOCKE_CHAR_LOCKED then
         obj_mark_for_deletion(o)
         return
     end
     network_init_object(o, false, {
-        "oCharNum",
+        "oAnimState",
     })
 end
 
@@ -430,25 +456,26 @@ local graffiti_mat = gfx_get_from_name("mat_char_graffiti_graffiti")
 local changed_objects = {}
 function graffiti_geo_func(node, matStackIndex)
     local o = geo_get_current_object()
+    local charNum = o.oAnimState
 
     local geo = cast_graph_node(node.next)
     ---@cast geo GraphNodeDisplayList
 
-    local meshRoot = gfx_get_from_name("graffiti_dl_mesh_layer" .. o.oCharNum)
+    local meshRoot = gfx_get_from_name("graffiti_dl_mesh_layer" .. charNum)
     if not meshRoot then
-        meshRoot = gfx_create("graffiti_dl_mesh_layer" .. o.oCharNum, gfx_get_length(graffiti_mesh_layer))
+        meshRoot = gfx_create("graffiti_dl_mesh_layer" .. charNum, gfx_get_length(graffiti_mesh_layer))
         gfx_copy(meshRoot, graffiti_mesh_layer, gfx_get_length(graffiti_mesh_layer))
     end
 
-    local matRoot = gfx_get_from_name("graffiti_dl_mat" .. o.oCharNum)
+    local matRoot = gfx_get_from_name("graffiti_dl_mat" .. charNum)
     if not matRoot then
-        matRoot = gfx_create("graffiti_dl_mat" .. o.oCharNum, gfx_get_length(graffiti_mat))
+        matRoot = gfx_create("graffiti_dl_mat" .. charNum, gfx_get_length(graffiti_mat))
         gfx_copy(matRoot, graffiti_mat, gfx_get_length(graffiti_mat))
     end
     
     if not changed_objects[o] then
         local cmdMat = gfx_get_command(matRoot, 9)
-        local texture = charSelect.character_get_graffiti(o.oCharNum)
+        local texture = charSelect.character_get_graffiti(charNum)
         gfx_set_command(cmdMat, "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b_LOAD_BLOCK, 1, %t)", texture.texture)
 
         local cmdMesh = gfx_get_command(meshRoot, 4)
@@ -765,7 +792,7 @@ local function character_spawn_handler()
                             
                             --o.oFaceAngleRoll = mul_random(-0x1000, 0x1000)
                             obj_scale(o, math.clamp(graffitiSpawn.edge/350, 0.5, 5))
-                            o.oCharNum = charNum
+                            o.oAnimState = charNum
                         end)
                     end
                 end

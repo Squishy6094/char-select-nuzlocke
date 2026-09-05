@@ -1,5 +1,5 @@
 oTagLib = require("libs/oTagLib")
-charSelectObjs = require("libs/charSelectObjs")
+charObjs = require("libs/charObjs")
 
 saveFile = get_current_save_file_num() - 1
 function save_file_prefix(str)
