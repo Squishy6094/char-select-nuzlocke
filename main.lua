@@ -761,6 +761,7 @@ local function character_spawn_handler()
     local m = gMarioStates[0]
     local currLevel = gNetworkPlayers[0].currLevelNum
     local currArea = gNetworkPlayers[0].currAreaIndex
+    if currLevel == LEVEL_NUZLOCKE_MENU then return end
     if not charLevelMap[currLevel] or not charLevelMap[currLevel][currArea] then return end
     -- Don't run in act select
     if obj_get_first_with_behavior_id(id_bhvActSelector) then return end

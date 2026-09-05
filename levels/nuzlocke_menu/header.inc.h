@@ -1,0 +1,12 @@
+extern const GeoLayout nuzlocke_menu_area_1_geo[];
+extern const GeoLayout nuzlocke_menu_area_1[];
+extern const Collision nuzlocke_menu_area_1_collision[];
+extern const MacroObject nuzlocke_menu_area_1_macro_objs[];
+extern Lights1 nuzlocke_menu_dl_Material_lights;
+extern Vtx nuzlocke_menu_dl_Level_mesh_layer_1_vtx_cull[8];
+extern Vtx nuzlocke_menu_dl_Level_mesh_layer_1_vtx_0[4];
+extern Gfx nuzlocke_menu_dl_Level_mesh_layer_1_tri_0[];
+extern Gfx mat_nuzlocke_menu_dl_Material[];
+extern Gfx mat_revert_nuzlocke_menu_dl_Material[];
+extern Gfx nuzlocke_menu_dl_Level_mesh_layer_1[];
+extern Gfx nuzlocke_menu_dl_final_revert_mesh_layer_1[];

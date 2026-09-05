@@ -1,3 +1,5 @@
+LEVEL_NUZLOCKE_MENU = level_register("level_nuzlocke_menu_entry", COURSE_NONE, "Nuzlocke Options", "Nuzlocke", 0, 0, 0, 0)
+
 local TEX_LOGO = get_texture_info("char_select_logo")
 
 local introAnimFrame = 0
@@ -37,7 +39,7 @@ end
 -- Settings
 gGlobalSyncTable.nuzMixupMode = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
 gGlobalSyncTable.nuzCharsInLevel = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
-gGlobalSyncTable.nuzOptionsDone = 0
+gGlobalSyncTable.nuzOptionsDone = false
 
 local function update_menu_toggle(toggle, toggleChange, min, max)
     gGlobalSyncTable[toggle] = num_wrap(gGlobalSyncTable[toggle] + (toggleChange or 0), min, max)
@@ -51,7 +53,7 @@ local menuOptions = {
                 return "\\#888888\\Continue", "Cannot Continue Run!"..continueError
             else
                 if toggleChange ~= 0 then
-                    gGlobalSyncTable.nuzOptionsDone = 1
+                    gGlobalSyncTable.nuzOptionsDone = true
                 end
                 local stars = hud_get_value(HUD_DISPLAY_STARS)
                 local chars = nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED)
@@ -85,7 +87,7 @@ local menuOptions = {
         function (toggleChange)
             if toggleChange ~= 0 then
                 reset_save()
-                gGlobalSyncTable.nuzOptionsDone = 1
+                gGlobalSyncTable.nuzOptionsDone = true
             end
             return "Start Run", "Start the Run"
         end,
@@ -103,7 +105,7 @@ local logoScale
 local logoShake
 
 local function hud_render()
-    if gGlobalSyncTable.nuzOptionsDone ~= 0 then return end
+    if gGlobalSyncTable.nuzOptionsDone then return end
     local m = gMarioStates[0]
     djui_hud_set_resolution(RESOLUTION_N64)
     local sW = djui_hud_get_screen_width() + 1
@@ -177,4 +179,21 @@ local function hud_render()
     end
 end
 
-hook_event(HOOK_ON_HUD_RENDER, hud_render)
+local function before_mario_update()
+end
+
+local function update()
+    if gNetworkPlayers[0].currLevelNum ~= LEVEL_NUZLOCKE_MENU then
+        if not gGlobalSyncTable.nuzOptionsDone then
+            warp_to_level(LEVEL_NUZLOCKE_MENU, 1, 0)
+        end
+    else
+        if gGlobalSyncTable.nuzOptionsDone then
+            warp_to_start_level()
+        end
+    end
+end
+
+hook_event(HOOK_ON_HUD_RENDER_BEHIND, hud_render)
+hook_event(HOOK_BEFORE_MARIO_UPDATE, before_mario_update)
+hook_event(HOOK_UPDATE, update)
