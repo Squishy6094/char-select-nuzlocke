@@ -233,7 +233,7 @@ end
 ---@param o Object
 local function character_obj_loop(o)
     o.oIsChar = 1
-    o.globalPlayerIndex = network_local_index_from_global(0)
+    o.globalPlayerIndex = network_global_index_from_local(0)
     obj_set_model_extended(o, characterTable[o.oCharNum][o.oCharAlt].model)
     if o.header.gfx.sharedChild then
         o.header.gfx.sharedChild.hookProcess = 1
@@ -246,7 +246,7 @@ if not charSelectExists then
     ---@param o Object
     function character_obj_loop(o)
         o.oIsChar = 1
-        o.globalPlayerIndex = network_local_index_from_global(0)
+        o.globalPlayerIndex = network_global_index_from_local(0)
         if o.header.gfx.sharedChild then
             o.header.gfx.sharedChild.hookProcess = 1
         end
@@ -317,9 +317,8 @@ local fallbackPalette = {
     [EMBLEM] = { r = 0xff, g = 0x00, b = 0x00 },
 }
 
-local function reset_mario_palette(m)
-    m = type(m) == "userdata" and m or gMarioStates[0]
-    if m.playerIndex ~= 0 then return end
+local function reset_mario_palette()
+    m = gMarioStates[0]
     if modelRevert.marioProcessed then
         for i = PANTS, EMBLEM do
             network_player_set_override_palette_color(np, i, modelRevert.palette[i])
@@ -332,7 +331,7 @@ local function reset_mario_palette(m)
         m.marioBodyState.modelState = modelRevert.modelState
         m.fadeWarpOpacity = modelRevert.fadeWarpOpacity
         vec3f_copy(m.marioBodyState.heldObjLastPosition, modelRevert.holp)
-        m.heldObj = modelRevert.heldObj
+        --m.heldObj = modelRevert.heldObj
         m.marioBodyState.allowPartRotation = modelRevert.allowPartRotation
         vec3s_copy(m.marioBodyState.torsoAngle, modelRevert.torsoAngle)
         vec3s_copy(m.marioBodyState.headAngle, modelRevert.headAngle)
@@ -343,11 +342,10 @@ local function reset_mario_palette(m)
     end
 end
 
-local function character_obj_before_geo_process(node, _)
+local function character_obj_before_geo_process()
     local o = geo_get_current_object()
     if not o or o.activeFlags == ACTIVE_FLAG_DEACTIVATED then return end
-    if obj_has_behavior_id(o, id_bhvMario) ~= 0 then
-    elseif o.oIsChar ~= 0 then
+    if o.oIsChar ~= 0 then
         local modelData = charModelData[o] or {}
         local charPalette = modelData.palette or {}
         local anims
@@ -361,17 +359,19 @@ local function character_obj_before_geo_process(node, _)
             anims = charSelect.character_get_animations(model)
         end
 
-        for i = PANTS, EMBLEM do
-            local playerColor = og_network_player_get_override_palette_color(np, i)
-            modelRevert.palette[i] = {
-                r = playerColor.r,
-                g = playerColor.g,
-                b = playerColor.b,
-            }
-            network_player_set_override_palette_color(np, i, charPalette[i] or fallbackPalette[i])
-        end
 
         if not modelRevert.marioProcessed then
+            -- store revert palette AND update palette for obj
+            for i = PANTS, EMBLEM do
+                local playerColor = og_network_player_get_override_palette_color(np, i)
+                modelRevert.palette[i] = {
+                    r = playerColor.r,
+                    g = playerColor.g,
+                    b = playerColor.b,
+                }
+                network_player_set_override_palette_color(np, i, charPalette[i] or fallbackPalette[i])
+            end
+
             modelRevert.eyeState = m.marioBodyState.eyeState
             modelRevert.handState = m.marioBodyState.handState
             modelRevert.capState = m.marioBodyState.capState
@@ -379,7 +379,7 @@ local function character_obj_before_geo_process(node, _)
             modelRevert.modelState = m.marioBodyState.modelState
             modelRevert.fadeWarpOpacity = m.fadeWarpOpacity
             vec3f_copy(modelRevert.holp, m.marioBodyState.heldObjLastPosition)
-            modelRevert.heldObj = m.heldObj
+            --modelRevert.heldObj = m.heldObj
             m.heldObj = nil
             modelRevert.allowPartRotation = m.marioBodyState.allowPartRotation
             vec3s_copy(modelRevert.torsoAngle, m.marioBodyState.torsoAngle)
@@ -388,7 +388,13 @@ local function character_obj_before_geo_process(node, _)
             vec3s_copy(modelRevert.headRotation, m.statusForCamera.headRotation)
 
             modelRevert.marioProcessed = true
+        else
+            -- only update palette for obj on subsequent models
+            for i = PANTS, EMBLEM do
+                network_player_set_override_palette_color(np, i, charPalette[i] or fallbackPalette[i])
+            end
         end
+
 
         -- Set model data and defaults
 
@@ -397,7 +403,7 @@ local function character_obj_before_geo_process(node, _)
         m.marioBodyState.capState = modelData.capState or MARIO_HAS_DEFAULT_CAP_ON
         m.marioBodyState.punchState = modelData.punchState or 0
         m.marioBodyState.modelState = ((modelData.modelState or 0) & ~0xFF) |
-        (o.oOpacity < 0xFF and (0x100 | o.oOpacity) or 0)
+            (o.oOpacity < 0xFF and (0x100 | o.oOpacity) or 0)
         m.marioBodyState.allowPartRotation = 1
         vec_copy_or_default(m.marioBodyState.torsoAngle, modelData.torsoAngle, gVec3sZero)
         vec_copy_or_default(m.marioBodyState.headAngle, modelData.headAngle, gVec3sZero)
@@ -416,17 +422,18 @@ local function character_obj_before_geo_process(node, _)
         -- Find and apply any custom anims
         if anims then
             if not modelData.eyeState and anims.eyes and anims.eyes[o.oCharAnim] then
-                m.marioBodyState.eyeState = run_func_or_get_var(anims.eyes[o.oCharAnim], m, o.header.gfx.animInfo.animFrame)
+                m.marioBodyState.eyeState = run_func_or_get_var(anims.eyes[o.oCharAnim], m,
+                    o.header.gfx.animInfo.animFrame)
             end
             if not modelData.handState and anims.hands and anims.hands[o.oCharAnim] then
                 m.marioBodyState.handState = run_func_or_get_var(anims.hands[o.oCharAnim], m, o.header.gfx.animInfo
-                    .animFrame) or m.marioBodyState.handState
+                    .animFrame)
             end
         end
-    end 
+    end
 end
 
-hook_event(HOOK_BEFORE_MARIO_UPDATE, reset_mario_palette)
+hook_event(HOOK_UPDATE, reset_mario_palette)
 hook_event(HOOK_BEFORE_PLAY_MODE_UPDATE, reset_mario_palette)
 hook_event(HOOK_BEFORE_GEO_PROCESS, character_obj_before_geo_process)
 

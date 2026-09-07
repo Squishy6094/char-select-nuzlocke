@@ -227,8 +227,7 @@ function reset_save(seed, noSync)
     end
     mod_storage_save(save_file_prefix("romhack"), currRomhack)
 
-    gGlobalSyncTable.nuzOptionsDone = 1
-
+    gGlobalSyncTable.nuzOptionsDone = true
 
     if not noSync then
         network_send(true, {
@@ -307,7 +306,7 @@ local function update()
         mod_storage_save(save_file_prefix("charList"), charList)
 
         if nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) == 0 then
-            gGlobalSyncTable.nuzOptionsDone = 0
+            gGlobalSyncTable.nuzOptionsDone = false
         end
     end
 end
@@ -447,22 +446,24 @@ end
 
 ---@param o Object
 local function bhv_char_graffiti_loop(o)
-    if o.oFloor.room == 0 or current_mario_room_check(o.oFloor.room) ~= 0 then
-        cur_obj_unhide()
-    else
-        cur_obj_hide()
+    if o.oFloor then
+        if o.oFloor.room == 0 or current_mario_room_check(o.oFloor.room) ~= 0 then
+            cur_obj_unhide()
+        else
+            cur_obj_hide()
+        end
+
+        o.oPosX = (o.oFloor.vertex1.x + o.oFloor.vertex2.x + o.oFloor.vertex3.x)/3
+        o.oPosY = (o.oFloor.vertex1.y + o.oFloor.vertex2.y + o.oFloor.vertex3.y)/3
+        o.oPosZ = (o.oFloor.vertex1.z + o.oFloor.vertex2.z + o.oFloor.vertex3.z)/3
+
+        local slopeAngle = atan2s(o.oFloor.normal.z, o.oFloor.normal.x)
+        local tilt = 0
+        local pitch = atan2s(math.sqrt(o.oFloor.normal.x * o.oFloor.normal.x + o.oFloor.normal.z * o.oFloor.normal.z), o.oFloor.normal.y)
+        o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
+        o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
+        o.oFaceAngleYaw = slopeAngle + tilt
     end
-
-    o.oPosX = (o.oFloor.vertex1.x + o.oFloor.vertex2.x + o.oFloor.vertex3.x)/3
-    o.oPosY = (o.oFloor.vertex1.y + o.oFloor.vertex2.y + o.oFloor.vertex3.y)/3
-    o.oPosZ = (o.oFloor.vertex1.z + o.oFloor.vertex2.z + o.oFloor.vertex3.z)/3
-
-    local slopeAngle = atan2s(o.oFloor.normal.z, o.oFloor.normal.x)
-    local tilt = 0
-    local pitch = atan2s(math.sqrt(o.oFloor.normal.x * o.oFloor.normal.x + o.oFloor.normal.z * o.oFloor.normal.z), o.oFloor.normal.y)
-    o.oFaceAnglePitch = (0x4000-pitch)*coss(tilt)
-    o.oFaceAngleRoll = (0x4000-pitch)*sins(tilt)
-    o.oFaceAngleYaw = slopeAngle + tilt
 end
 
 id_bhvCharGraffiti = hook_behavior(nil, OBJ_LIST_DEFAULT, false, bhv_char_graffiti_init, bhv_char_graffiti_loop)

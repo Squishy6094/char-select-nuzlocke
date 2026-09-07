@@ -190,6 +190,8 @@ local function update()
     else
         if gGlobalSyncTable.nuzOptionsDone then
             warp_to_start_level()
+        else
+            set_mario_action(gMarioStates[0], ACT_DISAPPEARED, 0)
         end
     end
 end
