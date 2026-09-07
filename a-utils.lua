@@ -212,7 +212,7 @@ function color_to_string(r, g, b)
 end
 
 function num_wrap(num, min, max)
-    return min + (num - min) % ((max + 1) - min)
+    return min + (num - min) % math.max((max + 1) - min, 1)
 end
 
 -- Custom mulberry32 based rng funcs for cross-device-compatibility

@@ -50,14 +50,18 @@ local menuOptions = {
     [MENU_STATE_MAIN] = {
         function (toggleChange)
             if continueError ~= "" then
-                return "\\#888888\\Continue", "Cannot Continue Run!"..continueError
+                return "\\#888888\\Continue", "Cannot Continue Run, "..string.sub(continueError, 2, #continueError)
             else
-                if toggleChange ~= 0 then
-                    gGlobalSyncTable.nuzOptionsDone = true
-                end
                 local stars = hud_get_value(HUD_DISPLAY_STARS)
                 local chars = nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED)
-                return "Continue", "Continue your existing run with ".. stars .." Star"..(stars ~= 1 and "s" or "").." and "..chars.." Character"..(chars ~= 1 and "s" or "")
+                if chars > 0 then
+                    if toggleChange ~= 0 then
+                        gGlobalSyncTable.nuzOptionsDone = true
+                    end
+                    return "Continue", "Continue your existing run with ".. stars .." Star"..(stars ~= 1 and "s" or "").." and "..chars.." Character"..(chars ~= 1 and "s" or "")
+                else
+                    return "\\#888888\\Continue", "Cannot Continue Run, No Characters Left!"
+                end
             end
         end,
         function (toggleChange)

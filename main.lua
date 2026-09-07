@@ -50,6 +50,26 @@ local function check_character_packs()
     end
 end
 
+function nuzlocke_set_character_state(charNum, charState)
+    if not charTable or not charNum or not charState then return end
+    gGlobalSyncTable["charState"..charTable[charNum].saveName] = charState
+end
+
+function nuzlocke_get_character_state(charNum)
+    if not charTable or not charNum then return end
+    return gGlobalSyncTable["charState"..charTable[charNum].saveName]
+end
+
+function nuzlocke_count_character_state(charState)
+    local count = 0
+    for charNum, _ in pairs(charTable) do
+        if nuzlocke_get_character_state(charNum) == charState then
+            count = count + 1
+        end
+    end
+    return count
+end
+
 local function update_save(reset, seed)
     if not network_is_server() then return end
 
@@ -72,6 +92,10 @@ local function update_save(reset, seed)
         mod_storage_save_integer(save_file_prefix("progress"), save_file_get_flags())
     end
 
+    if mod_storage_load_integer(save_file_prefix("progress"), 0) == 0 and nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) <= 1 then
+        continueError = "\nNo Save Data"
+    end
+
     gGlobalSyncTable.nuzlockeSeed = seed or mod_storage_load_integer(save_file_prefix("seed"), get_time()%SEED_MAX)
     mod_storage_save_integer(save_file_prefix("seed"), gGlobalSyncTable.nuzlockeSeed)
     log_to_console("Character Select Nuzlocke: Set Seed to '" .. gGlobalSyncTable.nuzlockeSeed .. "'")
@@ -80,26 +104,6 @@ update_save()
 
 local function block_menu_in_stages()
     return gNetworkPlayers[0].currCourseNum == 0
-end
-
-function nuzlocke_set_character_state(charNum, charState)
-    if not charTable or not charNum or not charState then return end
-    gGlobalSyncTable["charState"..charTable[charNum].saveName] = charState
-end
-
-function nuzlocke_get_character_state(charNum)
-    if not charTable or not charNum then return end
-    return gGlobalSyncTable["charState"..charTable[charNum].saveName]
-end
-
-function nuzlocke_count_character_state(charState)
-    local count = 0
-    for charNum, _ in pairs(charTable) do
-        if nuzlocke_get_character_state(charNum) == charState then
-            count = count + 1
-        end
-    end
-    return count
 end
 
 local function nuzlocke_seed_rng(offset)
@@ -251,9 +255,6 @@ local function update()
 		charTable = _G.charSelect.character_get_full_table()
         check_character_packs()
         initial_setup()
-        if mod_storage_load_integer(save_file_prefix("progress"), 0) == 0 and nuzlocke_count_character_state(NUZLOCKE_CHAR_UNLOCKED) <= 1 then
-            continueError = "\nNo Save Data"
-        end
         syncedClient = true
     end
 
