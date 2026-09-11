@@ -85,7 +85,7 @@ local menuOptions = {
             update_menu_toggle("nuzCaplessMode", toggleChange, 0, 1)
 
             -- Get Toggle String
-            return "Capless Mode: "..(gGlobalSyncTable.nuzCaplessMode ~= 0 and "On" or "Off"), "Removes the Default Cap from play."
+            return "Capless Mode: "..(gGlobalSyncTable.nuzCaplessMode ~= 0 and "On" or "Off"), "Removes Default Cap, Characters take more damage or are debuffed"
         end,
         function (toggleChange)
             local maxPer = math.ceil(#charTable/charLevelMapCount)
@@ -155,38 +155,43 @@ local function hud_render()
 
     introAnimFrame = introAnimFrame + 1
 
-    if menuOptions[menuState] and network_is_server() then
-        if m.controller.buttonPressed & D_JPAD ~= 0 then
-            menuCurrOption = menuCurrOption + 1
+    if menuOptions[menuState] then
+        if m.controller.buttonPressed & R_TRIG ~= 0 then
+            djui_open_pause_menu()
         end
-        if m.controller.buttonPressed & U_JPAD ~= 0 then
-            menuCurrOption = menuCurrOption - 1
-        end
-        if m.controller.buttonPressed & B_BUTTON ~= 0 then
-            menuState = MENU_STATE_MAIN
-        end
-        local y = sH*0.5 - #menuOptions[menuState]*27*0.5
-        menuCurrOption = num_wrap(menuCurrOption, 1, #menuOptions[menuState])
-        for i = 1, #menuOptions[menuState] do
-            local isHovered = i == menuCurrOption
-            local change = 0
-            if m.controller.buttonPressed & A_BUTTON ~= 0 or m.controller.buttonPressed & R_JPAD ~= 0 then
-                change = 1
+        if network_is_server() then
+            if m.controller.buttonPressed & D_JPAD ~= 0 then
+                menuCurrOption = menuCurrOption + 1
             end
-            if m.controller.buttonPressed & L_JPAD ~= 0 then
-                change = -1
+            if m.controller.buttonPressed & U_JPAD ~= 0 then
+                menuCurrOption = menuCurrOption - 1
             end
+            if m.controller.buttonPressed & B_BUTTON ~= 0 then
+                menuState = MENU_STATE_MAIN
+            end
+            local y = sH*0.5 - #menuOptions[menuState]*27*0.5
+            menuCurrOption = num_wrap(menuCurrOption, 1, #menuOptions[menuState])
+            for i = 1, #menuOptions[menuState] do
+                local isHovered = i == menuCurrOption
+                local change = 0
+                if m.controller.buttonPressed & A_BUTTON ~= 0 or m.controller.buttonPressed & R_JPAD ~= 0 then
+                    change = 1
+                end
+                if m.controller.buttonPressed & L_JPAD ~= 0 then
+                    change = -1
+                end
 
-            local name, desc = menuOptions[menuState][i](isHovered and change or 0)
-            if isHovered then
-                djui_hud_set_color(255, 255, 127, 255)
-            else
-                djui_hud_set_color(255, 255, 255, 255)
+                local name, desc = menuOptions[menuState][i](isHovered and change or 0)
+                if isHovered then
+                    djui_hud_set_color(255, 255, 127, 255)
+                else
+                    djui_hud_set_color(255, 255, 255, 255)
+                end
+                local descW, descH = djui_hud_measure_text(desc)
+                djui_hud_print_text(name, sW-150, y + (i-1)*27, 0.5, 0.5)
+                djui_hud_print_text(desc, sW-148, y + 16 + (i-1)*27, 0.2, 0.2)
+                y = y + math.max(descH*0.2 - 10, 0)
             end
-            local descW, descH = djui_hud_measure_text(desc)
-            djui_hud_print_text(name, sW-150, y + (i-1)*27, 0.5, 0.5)
-            djui_hud_print_text(desc, sW-148, y + 16 + (i-1)*27, 0.2, 0.2)
-            y = y + math.max(descH*0.2 - 10, 0)
         end
     end
 end
