@@ -27,7 +27,6 @@ local function check_character_packs()
     end
 
     local modStorage = mod_storage_load_all()
-
     if modStorage then
         for key, value in pairs(modStorage) do
             if string.find(key, save_file_prefix("enabledPack")) then
@@ -39,13 +38,19 @@ local function check_character_packs()
             end
         end
 
+        local packError = false
         for name, status in pairs(characterMods) do
             if status == 0 then
                 continueError = continueError .. "\n\\#fff\\Extra Pack: " .. name
+                packError = true
             end
             if status == 2 then
                 continueError = continueError .. "\n\\#fff\\Missing Pack: " .. name
+                packError = true
             end
+        end
+        if packError then
+            continueError = "\nMismatched Character Packs"..continueError
         end
     end
 end
@@ -222,10 +227,16 @@ function reset_save(seed, noSync)
     update_save(true, seed)
     reset_characters()
 
+    local modStorage = mod_storage_load_all()
+    for key, value in pairs(modStorage) do
+        if string.find(key, save_file_prefix("enabledPack")) then
+            mod_storage_remove(key)
+        end
+    end
     local packCount = 0
     for name, status in pairs(characterMods) do
         if status ~= 2 then
-            mod_storage_save(save_file_prefix("enabledPack"..packCount), name)
+            mod_storage_save(save_file_prefix("enabledPack"..tostring(packCount)), name)
             packCount = packCount + 1
         end
     end
@@ -256,6 +267,14 @@ local function update()
         check_character_packs()
         initial_setup()
         syncedClient = true
+    end
+
+    if not gGlobalSyncTable.nuzOptionsDone then return end
+
+    if gGlobalSyncTable.nuzCaplessMode ~= 0 then
+        if gMarioStates[0].flags & MARIO_SPECIAL_CAPS == 0 then
+            gMarioStates[0].flags = gMarioStates[0].flags & ~MARIO_CAP_ON_HEAD
+        end
     end
 
     if not isDying and gMarioStates[0].action & ACT_GROUP_CUTSCENE == 0 then
@@ -356,6 +375,10 @@ local function bhv_unlockable_char_loop(o)
     o.oIntangibleTimer = -1
     local modelState = charObjs.character_obj_get_model_data(o)
     local nM = nearest_mario_state_to_object(o) ---@type MarioState
+
+    if gGlobalSyncTable.nuzCaplessMode ~= 0 then
+        modelState.capState = MARIO_HAS_DEFAULT_CAP_OFF
+    end
 
     if o.oAction == 0 then
         charObjs.character_obj_set_animation(o, charSelect.CS_ANIM_MENU)
@@ -627,6 +650,7 @@ local function find_character_spawn()
             local avoidWarp = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvWarp)
             local avoidDoorWarp = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvDoorWarp)
             local avoidWarpPipe = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvWarpPipe)
+            local avoidCannon = nearest_object_with_behavior_id_to_pos(surfaceX, surfaceY, surfaceZ, id_bhvCannonBarrel)
 
             local smallestEdge = nil
             for i = 0, 2 do
@@ -656,7 +680,8 @@ local function find_character_spawn()
             local avoidDist = math.min(avoidChar and dist_between_object_and_point(avoidChar, surfaceX, surfaceY, surfaceZ) or 0x8000,
                 avoidWarp and dist_between_object_and_point(avoidWarp, surfaceX, surfaceY, surfaceZ) or 0x8000,
                 avoidDoorWarp and dist_between_object_and_point(avoidDoorWarp, surfaceX, surfaceY, surfaceZ) or 0x8000,
-                avoidWarpPipe and dist_between_object_and_point(avoidWarpPipe, surfaceX, surfaceY, surfaceZ) or 0x8000)
+                avoidWarpPipe and dist_between_object_and_point(avoidWarpPipe, surfaceX, surfaceY, surfaceZ) or 0x8000,
+                avoidCannon and dist_between_object_and_point(avoidCannon, surfaceX, surfaceY, surfaceZ) or 0x8000)
 
             if not behindWarp and (avoidDist > 100 or spawnIteration > 5000) and (smallestEdge > 100 and smallestEdge < (500 + spawnIteration)) then --- math.floor(spawnIteration/100)*100 then
                 local outofBounds = false

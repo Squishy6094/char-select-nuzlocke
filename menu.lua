@@ -33,12 +33,13 @@ log_to_console(fileRomhack)
 
 continueError = ""
 if fileRomhack ~= currRomhack then
-    continueError = continueError.."\nRomhack Mismatch: Expected "..fileRomhack
+    continueError = continueError.."\nMismatched Romhack\nExpected "..fileRomhack
 end
 
 -- Settings
+gGlobalSyncTable.nuzCaplessMode = mod_storage_load_integer(save_file_prefix("nuzCaplessMode"), 0)
 gGlobalSyncTable.nuzMixupMode = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
-gGlobalSyncTable.nuzCharsInLevel = mod_storage_load_integer(save_file_prefix("nuzMixupMode"), 0)
+gGlobalSyncTable.nuzCharsInLevel = mod_storage_load_integer(save_file_prefix("nuzCharsInLevel"), 0)
 gGlobalSyncTable.nuzOptionsDone = false
 
 local function update_menu_toggle(toggle, toggleChange, min, max)
@@ -78,6 +79,13 @@ local menuOptions = {
 
             -- Get Toggle String
             return "Mix-up Mode: "..(gGlobalSyncTable.nuzMixupMode ~= 0 and "On" or "Off"), "Randomly Set Character on Star Collect and Stage Entrance"
+        end,
+        function (toggleChange)
+            -- Update toggle
+            update_menu_toggle("nuzCaplessMode", toggleChange, 0, 1)
+
+            -- Get Toggle String
+            return "Capless Mode: "..(gGlobalSyncTable.nuzCaplessMode ~= 0 and "On" or "Off"), "Removes the Default Cap from play."
         end,
         function (toggleChange)
             local maxPer = math.ceil(#charTable/charLevelMapCount)

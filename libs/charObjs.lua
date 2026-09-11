@@ -119,9 +119,9 @@ local function character_obj_set_animation(o, animID, accel)
 
     if anims and anims.anims then
         if anims.anims[animID] then
-            smlua_anim_util_set_animation(o, anims.anims[animID])
+            smlua_anim_util_set_animation(o, run_func_or_get_var(anims.anims[animID], gMarioStates[0], animInfo.animFrame))
         elseif anims.anims[animIDFallback] then
-            smlua_anim_util_set_animation(o, anims.anims[animIDFallback])
+            smlua_anim_util_set_animation(o, run_func_or_get_var(anims.anims[animIDFallback], gMarioStates[0], animInfo.animFrame))
         else
             animInfo.curAnim = animIDFallback and get_mario_vanilla_animation(animIDFallback) or
                 get_mario_vanilla_animation(animID)
@@ -380,7 +380,7 @@ local function character_obj_before_geo_process()
             modelRevert.fadeWarpOpacity = m.fadeWarpOpacity
             vec3f_copy(modelRevert.holp, m.marioBodyState.heldObjLastPosition)
             --modelRevert.heldObj = m.heldObj
-            m.heldObj = nil
+            --m.heldObj = nil
             modelRevert.allowPartRotation = m.marioBodyState.allowPartRotation
             vec3s_copy(modelRevert.torsoAngle, m.marioBodyState.torsoAngle)
             vec3s_copy(modelRevert.headAngle, m.marioBodyState.headAngle)
@@ -420,14 +420,14 @@ local function character_obj_before_geo_process()
         end
 
         -- Find and apply any custom anims
-        if anims then
+        if anims and o.header.gfx.animInfo then
             if not modelData.eyeState and anims.eyes and anims.eyes[o.oCharAnim] then
-                m.marioBodyState.eyeState = run_func_or_get_var(anims.eyes[o.oCharAnim], m,
-                    o.header.gfx.animInfo.animFrame)
+                local eyeState = run_func_or_get_var(anims.eyes[o.oCharAnim], m, o.header.gfx.animInfo.animFrame)
+                m.marioBodyState.eyeState = eyeState or m.marioBodyState.eyeState
             end
             if not modelData.handState and anims.hands and anims.hands[o.oCharAnim] then
-                m.marioBodyState.handState = run_func_or_get_var(anims.hands[o.oCharAnim], m, o.header.gfx.animInfo
-                    .animFrame)
+                local handState = run_func_or_get_var(anims.hands[o.oCharAnim], m, o.header.gfx.animInfo.animFrame)
+                m.marioBodyState.handState = handState or m.marioBodyState.handState
             end
         end
     end
